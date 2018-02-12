@@ -1,0 +1,26 @@
+{
+  "name": "scribarium",
+  "version": "0.1.0",
+  "description": "A resource building for writing.  HTML Live Page Editor.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"no test\" > true",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github.com/d3x0r/scribarium"
+  },
+  "keywords": [
+    "HTML",
+    "Editor",
+    "HTML-Editor",
+    "composer",
+    "builder"
+  ],
+  "author": "d3x0r",
+  "license": "LGPL-3.0",
+  "dependencies": {
+    "sack.vfs": "^0.9.119"
+  }
+}
