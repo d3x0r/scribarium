@@ -25,37 +25,24 @@ server.on( "request", (req, res) => {
 	res.writeHead(404);
 	res.end('<HTML><head><title>No resource</head><BODY>No Resource</BODY></HTML>');
 });
-server.on('accept', function(ws){validateWebSock(server, ws) } ) // ws NPM
+server.on('accept', validateWebSock ) // ws NPM
 server.on('connect', webSockConnected );
 
 
-function validateWebSock( httpServer, ws ) {
-	//console.log( "connect?", ws.upgradeReq.headers, ws.upgradeReq.url )
-	//console.log( "connect?", ws )
-	//console.log( "connect?", req )
-
+function validateWebSock( ws ) {
 	var proto = ws.headers['Sec-WebSocket-Protocol'];
-	ws.internal = httpServer.internal;
-	//console.log( "ws:", ws );
-	//_debug&&
 	_debug && console.log( "Just accepting, but this is the proto it asked for:", proto, " And this is the thing itself.", ws );
-
-	//ws.protocol = p;
-
 	httpServer.accept();
-
 }
 
 function webSockConnected( ws ) {
-		var p = ws.protocol;
-
+	var p = ws.protocol;
 	var ip = ( ws.headers && ws.headers['x-forwarded-for'] ) ||
 		 ws.connection.remoteAddress ||
 		 ws.socket.remoteAddress ||
 		 ws.connection.socket.remoteAddress;
 	ws.clientAddress = ip;
 	//_debug&&console.log( "ws Connected from:", ip , p, ws.protocol, ws.headers['Sec-WebSocket-Protocol']);
-
 	ws.on( "message", handleMessage );
 	//if( p ) {
 	//	p.connect();
