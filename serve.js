@@ -9,7 +9,7 @@ const _debug = true;
 module.exports = exports = function( req, res ) {
 	_debug && console.log( "URL:", req.url );
 
-	var filePath = __dirname__ + req.url;
+	var filePath = __dirname + req.url;
 		var filePath = '.' + unescape(req.url);
 						if( filePath === "./" ) {
 							filePath = "./index.html";

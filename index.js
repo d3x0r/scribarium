@@ -1,5 +1,7 @@
+const _debug = true;
 
 var sack = require( "sack.vfs" );
+var vol = sack.Volume();
 
 //------ setup websocket compatibility
 const WS = sack.WebSocket.readyStates; // WS.OPEN, WS.OPENING, WS.CLOSED,...
@@ -23,7 +25,7 @@ server.on( "request", (req, res) => {
 	res.writeHead(404);
 	res.end('<HTML><head><title>No resource</head><BODY>No Resource</BODY></HTML>');
 });
-server.on('accept', function(ws){validateWebSock(thisServer, ws) } ) // ws NPM
+server.on('accept', function(ws){validateWebSock(server, ws) } ) // ws NPM
 server.on('connect', webSockConnected );
 
 
@@ -36,11 +38,11 @@ function validateWebSock( httpServer, ws ) {
 	ws.internal = httpServer.internal;
 	//console.log( "ws:", ws );
 	//_debug&&
-	_debug && console.log( "protocols:", protocols, "\n", proto, ws );
+	_debug && console.log( "Just accepting, but this is the proto it asked for:", proto, " And this is the thing itself.", ws );
 
 	//ws.protocol = p;
 
-	httpServer.wsServer.accept();
+	httpServer.accept();
 
 }
 
@@ -52,7 +54,7 @@ function webSockConnected( ws ) {
 		 ws.socket.remoteAddress ||
 		 ws.connection.socket.remoteAddress;
 	ws.clientAddress = ip;
-	_debug&&console.log( "ws Connected from:", ip , p, ws.protocol, ws.headers['Sec-WebSocket-Protocol']);
+	//_debug&&console.log( "ws Connected from:", ip , p, ws.protocol, ws.headers['Sec-WebSocket-Protocol']);
 
 	ws.on( "message", handleMessage );
 	//if( p ) {
@@ -62,4 +64,5 @@ function webSockConnected( ws ) {
 
 function handleMessage( msg ) {
 	console.log( "GOT:", msg );
+	this.send( `{"op":"script","code":${JSON.stringify(vol.read( "editgrid.js" ).toString())}}`);
 }

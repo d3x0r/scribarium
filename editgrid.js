@@ -1,4 +1,13 @@
 "use strict";
+
+var arrScripts = document.getElementsByTagName('script');
+var strScriptTagId = arrScripts[arrScripts.length - 1];
+//debugger;
+console.log( "HELLO! I have Context?", strScriptTagId )
+
+var origin = strScriptTagId.origin || location.origin;
+
+var origin_addr = origin + "/editgrid.js";
 //document.body.addEventListener("load", ()=> {
 
 var require_required = false;
@@ -8,23 +17,31 @@ function setupGrid() {
 if( !("require" in window) ) {
 	if( !require_required ) {
 		var script = document.createElement( "SCRIPT" );
-		script.src = "/util/require.js";
-		document.body.appendChild( script );
+		script.src =  origin + "/util/require.js";
+		//document.body.appendChild( script );
 		require_required = true;
+
+		script = document.createElement( "SCRIPT" );
+		script.src =  origin + "/util/json6.js";
+		document.body.appendChild( script );
+		script.onload = ()=>{
+			JSON.parse = JSON6.parse;
+			console.log( "loaded" );
+		}	
 	}
-	setTimeout( setupGrid, 10 );
-	return;
+	//setTimeout( setupGrid, 10 );
+	//return;
 }
-if( !window.require ) {
-	setTimeout( setupGrid, 10 );
-	return;
-}
+//if( !window.require ) {
+//	setTimeout( setupGrid, 10 );
+//	return;
+//}
 
 
-const JSON6 = window.require( "1:/util/json6.js" );
-JSON.parse = JSON6.parse;
 
-console.log( "loaded" );
+var allControls = []
+var controls = []
+var colors = [];
 
 var root = document.documentElement;
 console.log( root );
@@ -33,7 +50,7 @@ console.log( root );
 //var toolbox_window = window.open("toolbox.js");
 if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 	console.log( "something..." );
-	var toolbox_window = window.open("/editor/toolbox.html", "editor_toolbox" );
+	var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
 	//var
 	//toolbox_window._origin = toolbox_window.location.href;
 
@@ -76,7 +93,7 @@ gameContainer.style.left = 0;
 gameContainer.style.top = 0;
 gameContainer.style.width = "100%";
 gameContainer.style.height = "100%";
-
+gameContainer.style.zIndex = 10000;
 
 var editmesh = document.createElement( "canvas" );
 
@@ -90,9 +107,9 @@ editmesh.height = 1080;
 editmesh.style.border = 0;
 
 var visible = false;
-gameContainer.style.visibility = "hidden";
+gameContainer.style.visibility = "visible";
 
-function setupKeyPress() {
+function setupKeyPress( window ) {
 	var collect = '';
 	var lasttick = Date.now();
 	window.addEventListener( "keydown", (key)=>{
@@ -146,7 +163,7 @@ function setupKeyPress() {
 	} );
 }
 
-setupKeyPress();
+setupKeyPress( window );
 
 
 
@@ -156,7 +173,7 @@ var mouse_over;
 var selected_control;
 
 editmesh.addEventListener( "mousedown", (event) => {
-    console.log( "Mouse Event : ", event );
+	//console.log( "Mouse Event : ", event );
 	event.preventDefault();
 	mouse_drag = locateTarget( controls, event, 0 );
 	if( mouse_drag && mouse_drag.nearEdge )  {
@@ -166,7 +183,7 @@ editmesh.addEventListener( "mousedown", (event) => {
   })
 
 editmesh.addEventListener( "mouseup", (event) => {
-    console.log( "Mouse Event : ", event );
+	//console.log( "Mouse Event : ", event );
 	event.preventDefault();
 	mouse_drag = null;//locateTarget( document.body.childNodes, event );
 	mouse_size = null;//locateTarget( document.body.childNodes, event );
@@ -185,6 +202,7 @@ function getOffset( el ) {
 }
 	function locateTarget( controls, event, level ) {
 		var result;
+		//console.log( "------- FIND TARGET ----------- " );
 		for( var n = 0; n < controls.length; n++ ) {
 			result = locateTarget2( controls[n], event, level );
 			if( result ) return result;
@@ -198,14 +216,15 @@ function getOffset( el ) {
 	var c = control.element;
 	if( c === editmesh ) continue;
 	if( c === gameContainer ) continue;
-      //console.log( "mouse is ", event.clientX, event.clientY, " in " , c.rect )
+
+	//console.log( "mouse is ", event.clientX, event.clientY, " in " , control.rect )
 	if( "getBoundingClientRect" in c  
 		|| "clientHeight" in c ) 
 	{
 
 	//var rect = c.getBoundingClientRect();
 	var ofs = getOffset( c );
-	var rect = { top:ofs.top, left:ofs.left, bottom:ofs.top+c.clientHeight, right:ofs.left+c.clientWidth };
+	var rect = control.rect;//{ top:ofs.top, left:ofs.left, bottom:ofs.top+c.clientHeight, right:ofs.left+c.clientWidth };
 	var nearEdge = 0;
       if( //c.id 
 	 event.clientX >= rect.left
@@ -213,7 +232,7 @@ function getOffset( el ) {
         && event.clientY >= rect.top
         && event.clientY < rect.bottom ) {
 	var result;
-	console.log( "in element: ", rect );
+	//console.log( "in element: ", rect );
 	if( ( event.clientX - rect.left ) < 10 ) {
 		nearEdge |= 1;
 	}
@@ -223,13 +242,13 @@ function getOffset( el ) {
 		nearEdge |= 4;
 	if( ( rect.right - event.clientX ) < 10 )
 		nearEdge |= 8;
-
+	//console.log( "look for a deepr control..." );
 	 if( !(result=locateTarget2( control.child, event, ++level )) ) {
-	        //console.log( "in a control...")
-	        return  { element : c, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:level };
+	        //console.log( "not in a deeper control...")
+	        return  { element : c, control : control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:level };
 	}
-	else	 {
-	        //console.log( "still in a control...")
+	else {
+	        //console.log( "in a deeper control...", result)
 		return result
 	}
 	}
@@ -240,8 +259,11 @@ function getOffset( el ) {
         //if( event.x)
   }
 
-	function mousePercent( event ) {
-		
+	function mousePercent( c, event ) {
+		var coord = { x: 0, y: 0 };
+		coord.x = 100 * ( event.clientX - c.control.rect.left ) / c.control.pr.width;
+		coord.y = 100 * ( event.clientY - c.control.rect.top ) / c.control.pr.height;
+		return coord;
 	}
 
 	function getWidth( width, element ) {
@@ -315,13 +337,25 @@ function getOffset( el ) {
 	}
         if( mouse_drag ) {
 		event.preventDefault();
-		var deltaX = event.clientX - mouse_drag.x;
-        	var deltaY = event.clientY - mouse_drag.y;
-		var left = parseInt(mouse_drag.element.style.left.replace('px', ''), 10)||0;
-		var top = parseInt(mouse_drag.element.style.top.replace('px', ''), 10)||0;
-	        mouse_drag.element.style.left =left + event.clientX - mouse_drag.x;
-        	mouse_drag.element.style.top = top+event.clientY - mouse_drag.y;
+		var deltaX = 100 * ( event.clientX - mouse_drag.x ) / controls[0].rect.width;
+        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / controls[0].rect.height;
+		var left = parseInt(mouse_drag.element.style.left.replace('%', ''), 10)||0;
+		var top = parseInt(mouse_drag.element.style.top.replace('%', ''), 10)||0;
+		var c = mousePercent( mouse_drag, event );
+	        mouse_drag.element.style.left =(left - ((mouse_drag.x-event.clientX)/10))+"%";
+        	mouse_drag.element.style.top = (top - ((mouse_drag.y-event.clientY) / 10))+"%";
 
+		var staticRect = mouse_drag.element.getBoundingClientRect();
+		var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
+		
+		rect.left += mouse_drag.control.rectOffset.left;
+		rect.top += mouse_drag.control.rectOffset.top;
+		rect.right += mouse_drag.control.rectOffset.left;
+		rect.bottom += mouse_drag.control.rectOffset.top;
+                Object.assign( mouse_drag.control.rect, rect );
+		
+	//console.log( "rect top:", mouse_drag.control.rect.top, mouse_drag.element.style.top, staticRect.top );
+	
 		mouse_drag.x = event.clientX;
 		mouse_drag.y = event.clientY;
 
@@ -356,26 +390,26 @@ for( var a = 0; a < 1; a++ ) {
         console.log( "First Init", meshrect );
 }
 
-
-var allControls = []
-var controls = []
-var colors = [];
-
-function Control( element, rect ) {
+var controlOffset = { left:0, top:0 };
+var virtualParent = undefined;
+function Control( element, rect, rectOffset ) {
 	var c = { element:element
 	        , rect : rect
+		, rectOffset : rectOffset
           , child : undefined
           , parent : undefined
           , elder : undefined
 	  , index : 0
+	, level : 0
           };
         c.index = allControls.length;
-	console.log( "something: ", c.index, element.nodeName, element.id );
 	allControls.push( c );
+	//console.log( "Addint a control at: ", rect.top, c.index, element.nodeName, element.id );
 
+	// set current pixel correds into relative coords.
 	fixLayout( c );
 
-	console.log( c, Object.keys( Object.getPrototypeOf( element) ))
+	//console.log( "New Control is: ", c, Object.keys( Object.getPrototypeOf( element) ))
 	for( var n = 0; n < controls.length; n++ ) {
 		var x = controls[n];
 		//console.log( "parent node : ", element.parentNode)
@@ -402,7 +436,8 @@ function Control( element, rect ) {
 		      c.parent = x;
 		      c.elder = x.child;
 		      x.child = c;
-		      return;
+		      c.level = x.level+1;
+		      return c;
 		}
 	}
 
@@ -424,13 +459,22 @@ function Control( element, rect ) {
 			x.parent = c;
 			x.elder = x.child;
 			c.child = x;
-			return;
+			c.level = x.level-1;
+			return c;
 		}
 	}
-	// no parent or child found in list already.
-  //console.log( "added ", c.element )
-  controls.push( c );
-  return c;
+	if( virtualParent && !c.parent ) {
+		c.parent = virtualParent;
+		c.elder = virtualParent.child;
+		virtualParent.child = c;
+		c.level = virtualParent.level+1;
+	} else {
+		// no parent or child found in list already.
+		//console.log( "added ", c.element )
+		c.level = 0;
+		controls.push( c );
+	}
+	return c;
 }
 
 function fixLayout(c) {
@@ -438,6 +482,9 @@ var e = c.element;
 var p = e.parentElement;
 var er = e.getBoundingClientRect();
 var pr = p.getBoundingClientRect();
+
+	c.pr = pr;
+	c.er = er;
 
 	if( !e.style.left || !e.style.left.endsWith( "%" ) ) {
 		//e.style.left = 100 * er.left / pr.width + "%";
@@ -462,6 +509,7 @@ function postDivs( w ) {
 	controls.forEach( postDiv );
 	function postDiv(control){
 		if( !control ) return;
+
 try {
 	var id = control.element.id;
 	var altId = control.element.nodeName + " " + control.element.style.width + " x " + control.element.style.height;
@@ -475,7 +523,7 @@ try {
 				width:control.element.style.width ,
 				height : control.element.style.height },
 			index:control.index}
-			, w.location.href );
+			, origin_addr );
 }catch( err ) {
 	console.log ("POST MESSAGE PUKED:", err );
 }
@@ -500,7 +548,7 @@ function drawControls() {
 
 function drawControl(control){
 	if( !control ) return;
-	control.rect = control.element.getBoundingClientRect();
+	//control.rect = control.element.getBoundingClientRect();
 	var rect = control.rect;
 	if( selected_control === control ) {
 		stroke_width = 4;
@@ -540,8 +588,8 @@ function drawControl(control){
 			else
 				stroke[3] = "blue";
 	}
-	if( ( selected_control === mouse_drag ) && mouse_over && mouse_over.element === control.element )  {
-		stroke_width = 2;
+	if( /*( selected_control === mouse_drag ) && */ mouse_over && mouse_over.element === control.element )  {
+		stroke_width = 3;
 		if( mouse_over.nearEdge ) {
 			if( mouse_over.nearEdge & 1 ) 
 				stroke[0] = "yellow";
@@ -610,23 +658,68 @@ function drawControl(control){
 }
 
 
+var idle_count = 0;
+var loading = true;
 function setupControls() {
-var all = document.getElementsByTagName("*");
-//console.log( "document has ", all );
-
-for( var a = 0; a < all.length; a++ ) {
- 	let element = all[a];
-	//if( !element.id ) continue;
-	if( !["BODY","DIV","IMG","SPAN"].find( tag=>tag === element.nodeName ) )
-		continue;
-	var rect = element.getBoundingClientRect();
-		Control( element, rect );
-        }
-//drawControls();
-      //  */
-
-// });
-//   setTimeout( tick, 500 );
+	loading = false;
+	function addControls( parent, element ) {
+		if( !element ) { loading = true; return false; }
+		//console.log( "Looking at element:", element );
+		if( element === editmesh ) return false;
+		if( element === gameContainer ) return false;
+		if( "IFRAME" === element.nodeName ) {
+			var priorOffset = controlOffset;
+			controlOffset = element.getBoundingClientRect();
+			
+			if( !element.contentWindow.document.body )
+				element.contentWindow.document.addEventListener( "load", 
+					()=> {
+						var priorOffset = controlOffset;
+						controlOffset = element.getBoundingClientRect();
+					console.log( "This is a load event:", created );
+						virtualParent = created;
+						addControls( parent, element.contentWindow.document.body ) 
+						controlOffset = priorOffset;
+					}
+				);
+			else {
+				virtualParent = parent;//controls[0];
+				 if( addControls( parent, element.contentWindow.document.body ) ) {
+					setupKeyPress( element.contentWindow );
+				}
+			}
+			controlOffset = priorOffset;
+		}
+		var created = false;
+		if( ["BODY","DIV","IMG","SPAN"].find( tag=>tag === element.nodeName ) ){
+			var existing = allControls.find( c=>c.element === element );	
+			if( !existing ) {
+				var staticRect = element.getBoundingClientRect();
+				var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
+				
+				rect.left += controlOffset.left;
+				rect.top += controlOffset.top;
+				rect.right += controlOffset.left;
+				rect.bottom += controlOffset.top;
+				created = Control( element, rect, controlOffset );
+			}
+			else
+				created = existing;
+        	}
+		var children = element.children;
+		if( children.length ) {
+			//console.log( "Children of:", element, children );
+			for( var c = 0; c < children.length; c++ ) 
+				addControls( created||parent, children[c] );
+			//console.log( "this created is an array:", created );
+		}
+		return created;
+	}
+	addControls( controls[0], document.body );
+	if( loading )
+		setTimeout( setupControls, 500 );
+	else if( idle_count++ < 3 ) 
+		setTimeout( setupControls, 500 ) ;
 
 }
 setupControls();
