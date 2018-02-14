@@ -36,13 +36,16 @@ window.addEventListener( 'message', ProcessParentMessage , false);
 // This function (available in the child code) will be called by the parent
 function ProcessParentMessage(message) {
 	// do something with the message
-	console.log( "Child Message:", message.data );
+	//console.log( "Child Message:", message.data );
 	try {
 		var msg = message.data;
-		if( msg.op === "div" ) {
+		if( msg.op === "style" ) {
+			addStyleOption( allStyles, msg );
+		} else if( msg.op === "div" ) {
 			//controlMap.set( 
 			if( msg.id )  {
 				addOption( namedDivs, msg );
+				addOption( allDivs, msg );
 				namedDivIDs.push( msg.index );
 			}
 			else {
@@ -60,9 +63,12 @@ function ProcessParentMessage(message) {
 //-------------------------------------------------------------
 var namedDivIDs = [];
 var allDivIDs = [];
+var allStyleIDs = [];
 
 var namedDivs = document.getElementById( "namedDivs" );
 var allDivs = document.getElementById( "allDivs" );
+var allStyles = document.getElementById( "styles" );
+var currentStyle = document.getElementById( "currentStyle" );
 
 var rectInfo = { 
 	left : document.getElementById( "leftCoord" ),
@@ -101,6 +107,7 @@ addSetThing( "setId", "id" );
 addSetThing( "setHtml", "innerHtml" );
 addSetThing( "setText", "innerText" );
 addSetThing( "setSrc", "src" );
+addSetThing( "setClass", "class" );
 
 
 var clearSelection = document.getElementById( "clearSelection" );
@@ -120,14 +127,26 @@ applyCoords.addEventListener( "click", ()=>{
 } );
 
 var selectedDiv = null;
-
+var selectedStyle = null;
+allStyles.onchange = styleSelect
 namedDivs.onchange = namedSelect
 allDivs.onchange = allSelect
 
+function addStyleOption( list, opt ) {
+	var option = document.createElement("option");
+	//console.log( "Add style:", opt );
+	option.text = opt.selectorText;
+	option.opt = opt;
+	//console.log( "option index : ", opt._index, option.text );
+	list.add(option);
+}
+
 function addOption( list, opt ) {
 	var option = document.createElement("option");
-
-	option.text = opt.id || opt.altId;
+	var leader = "";
+	for( n = 0; n < opt.level;n++ )
+		leader += "...";
+	option.text = leader + ( opt.id || opt.altId );
 	option._index = opt.index;
 	option.rect = opt.rect;
 	option.layout = opt.layout;
@@ -136,10 +155,18 @@ function addOption( list, opt ) {
 	list.add(option);
 }
 
+function styleSelect() {
+	selectedStyle = allStyles.options[allStyles.selectedIndex];
+	//console.log( "SELECTED:", selectedDiv );
+	//updateStyle();
+	currentStyle.value = selectedStyle.opt.cssText;
+	//window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
+}
+
 function namedSelect() {
 	allDivs.selectedIndex = -1;
 	selectedDiv = namedDivs.options[namedDivs.selectedIndex];
-	console.log( "SELECTED:", selectedDiv );
+	//console.log( "SELECTED:", selectedDiv );
 	updateCoords();
 	window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
 }
@@ -147,7 +174,7 @@ function namedSelect() {
 function allSelect() {
 	namedDivs.selectedIndex = -1;
 	selectedDiv = allDivs.options[allDivs.selectedIndex];
-	console.log( "SELECTED:", selectedDiv );
+	//console.log( "SELECTED:", selectedDiv );
 	updateCoords();
 	window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
 }

@@ -42,8 +42,8 @@ if( !("require" in window) ) {
 //}
 
 
-
-var allControls = []
+var styles = []; // these are styles for the page.....
+var allControls = [];
 var controls = []
 var colors = [];
 
@@ -69,6 +69,7 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 			var msg = message.data;
 			if( msg.op == "Hello" ) {
 				postDivs(toolbox_window);
+				postStyles(toolbox_window);
 			}
 			else if( msg.op === "select" ) {
 				selected_control = allControls[msg.index];
@@ -603,6 +604,8 @@ function postDivs( w ) {
 	controls.forEach( postDiv );
 	function postDiv(control){
 		if( !control ) return;
+		if( control.elder )
+			postDiv( control.elder );
 
 		try {
 			var id = control.element.id;
@@ -610,10 +613,10 @@ function postDivs( w ) {
 				w.postMessage( {op:"div",
 					id:id,
 					nChild : (control.child?control.child.index:-1),
-					nParent : (control.parent?control.child.parent:-1),
+					nParent : (control.parent?control.parent.index:-1),
 					nElder :(control.elder?control.elder.index:-1),
 					altId:altId,
-					gen:control.level,
+					level:control.level,
 					rect:control.rect,
 					layout : { left : control.element.style.left,
 						top :control.element.style.top, 
@@ -621,16 +624,31 @@ function postDivs( w ) {
 						height : control.element.style.height },
 					innerHtml : control.element.innerHTML,
 					innerText : control.element.innerText,
+					class : control.element.class,
 					src : control.element.src,
 					index:control.index
 				}, origin_addr );
 		}catch( err ) {
 			console.log ("POST MESSAGE PUKED:", err );
 		}
-		postDiv( control.elder );
 		postDiv( control.child );
 	}	
 }
+
+function postStyles( w ) {
+	styles.forEach( postStyle );
+	function postStyle(style){
+		try {
+			w.postMessage( {op:"style", 
+				cssText : style.style.cssText,
+				selectorText : style.style.selectorText,
+			} , origin_addr );
+		}catch( err ) {
+			console.log ("POST MESSAGE PUKED:", err );
+		}
+	}	
+}
+
 
 function drawControls() {
 	if( !visible ) return;
@@ -769,6 +787,18 @@ function defaultRefresh() {
 }
 
 
+function setupStyles() {
+	for( var n = 0; n < document.styleSheets.length; n++ ) {
+		var sheet = document.styleSheets[n];
+		for( var m = 0; m < sheet.rules.length; m++ ) {
+			var rule = sheet.rules[m];
+			styles.push( { style:rule, text:rule.selectorText } );
+		}
+	} 
+
+}
+setupStyles();
+
 var idle_count = 0;
 var loading = true;
 function setupControls() {
@@ -800,6 +830,8 @@ function setupControls() {
 				}
 			}
 			controlOffset = priorOffset;
+		}
+		if( "STYLE" === element.nodeName ) {
 		}
 		var created = false;
 		if( ["BODY","DIV","IMG","SPAN"].find( tag=>tag === element.nodeName ) ){
