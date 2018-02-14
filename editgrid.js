@@ -2,7 +2,7 @@
 
 var arrScripts = document.getElementsByTagName('script');
 var strScriptTagId = arrScripts[arrScripts.length - 1];
-//debugger;
+debugger;
 console.log( "HELLO! I have Context?", strScriptTagId )
 
 if( strScriptTagId.src ) {
@@ -609,6 +609,9 @@ function postDivs( w ) {
 			var altId = control.element.nodeName + " " + control.element.style.width + " x " + control.element.style.height;
 				w.postMessage( {op:"div",
 					id:id,
+					nChild : (control.child?control.child.index:-1),
+					nParent : (control.parent?control.child.parent:-1),
+					nElder :(control.elder?control.elder.index:-1),
 					altId:altId,
 					gen:control.level,
 					rect:control.rect,
@@ -616,11 +619,11 @@ function postDivs( w ) {
 						top :control.element.style.top, 
 						width:control.element.style.width ,
 						height : control.element.style.height },
-					innerHTML : control.element.innerHTML,
+					innerHtml : control.element.innerHTML,
 					innerText : control.element.innerText,
 					src : control.element.src,
-					index:control.index}
-					, origin_addr );
+					index:control.index
+				}, origin_addr );
 		}catch( err ) {
 			console.log ("POST MESSAGE PUKED:", err );
 		}
