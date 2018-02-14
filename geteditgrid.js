@@ -5,10 +5,10 @@ var peer;
 var usePort = 45200;
 if ("WebSocket" in window) {                                   
 	if( location.protocol === "https:" ) {
-		peer = `wss://${location.hostname}:45201/`;
+		peer = peer||`wss://${location.hostname}:45201/`;
 		usePort = 45201
 	} else
-		peer = `ws://${location.hostname}:45200/`;
+		peer = peer||`ws://${location.hostname}:45200/`;
   	openSocket( "scribarium", 0 );
 } else {
   // the browser doesn't support WebSocket.

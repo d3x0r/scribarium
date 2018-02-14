@@ -2,8 +2,8 @@
 
 var arrScripts = document.getElementsByTagName('script');
 var strScriptTagId = arrScripts[arrScripts.length - 1];
-debugger;
-console.log( "HELLO! I have Context?", strScriptTagId )
+//debugger;
+//console.log( "HELLO! I have Context?", strScriptTagId )
 
 if( strScriptTagId.src ) {
 	var filename = strScriptTagId.src.lastIndexOf( "/" );
@@ -11,7 +11,10 @@ if( strScriptTagId.src ) {
 } else
 	var origin = strScriptTagId.origin || location.origin;
 
-var origin_addr = origin + "/editgrid.js";
+//var origin_addr = "http://localhost:45200/editgrid.js";
+var origin_addr = "https://localhost:45201/editgrid.js";
+
+//var origin_addr = origin + "/editgrid.js";
 //document.body.addEventListener("load", ()=> {
 
 var require_required = false;
@@ -56,7 +59,9 @@ console.log( root );
 //var toolbox_window = window.open("toolbox.js");
 if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 	console.log( "something..." );
-	var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
+	//var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
+	var toolbox_window = window.open( "https://localhost:45201/toolbox.html", "editor_toolbox" );
+	//var toolbox_window = window.open( "https://localhost:45200/toolbox.html", "editor_toolbox" );
 	//var
 	//toolbox_window._origin = toolbox_window.location.href;
 
@@ -790,6 +795,7 @@ function defaultRefresh() {
 function setupStyles() {
 	for( var n = 0; n < document.styleSheets.length; n++ ) {
 		var sheet = document.styleSheets[n];
+		if( sheet.rules )
 		for( var m = 0; m < sheet.rules.length; m++ ) {
 			var rule = sheet.rules[m];
 			styles.push( { style:rule, text:rule.selectorText } );
@@ -811,7 +817,7 @@ function setupControls() {
 		if( "IFRAME" === element.nodeName ) {
 			var priorOffset = controlOffset;
 			controlOffset = element.getBoundingClientRect();
-			
+			try {
 			if( !element.contentWindow.document.body )
 				element.contentWindow.document.addEventListener( "load", 
 					()=> {
@@ -828,6 +834,9 @@ function setupControls() {
 				 if( addControls( parent, element.contentWindow.document.body ) ) {
 					setupKeyPress( element.contentWindow );
 				}
+			}
+			} catch ( err ) {
+				console.log( "Probably a security fence....", err );
 			}
 			controlOffset = priorOffset;
 		}
