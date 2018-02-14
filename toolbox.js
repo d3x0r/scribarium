@@ -36,7 +36,7 @@ window.addEventListener( 'message', ProcessParentMessage , false);
 // This function (available in the child code) will be called by the parent
 function ProcessParentMessage(message) {
 	// do something with the message
-	console.log( "Child Message:", message );
+	console.log( "Child Message:", message.data );
 	try {
 		var msg = message.data;
 		if( msg.op === "div" ) {
@@ -75,6 +75,40 @@ var rectInfo = {
 	layoutHeight : document.getElementById( "heightLayoutCoord" ),
 }
 
+var clearSelection = document.getElementById( "clearSelection" );
+clearSelection.addEventListener( "click", ()=>{
+	window.opener.postMessage( {op:"clearSelection"}, "*" );
+	allDivs.selectedIndex = -1;
+	namedDivs.selectedIndex = -1;
+	selectedDiv = null;
+	
+} );
+
+var textProps = [];
+function addSetThing( op, altop ) {
+	var idControl = {		
+		button : document.getElementById( op ),
+		textarea : document.getElementById( altop )
+	};
+	textProps.push( idControl );
+	idControl.button.addEventListener( "click", ()=>{
+		window.opener.postMessage( {op:op,index:selectedDiv._index,[altop]:idControl.textarea.value}, "*" );
+	
+	} );
+}
+
+addSetThing( "setId", "id" );
+addSetThing( "setHtml", "innerHtml" );
+addSetThing( "setText", "innerText" );
+addSetThing( "setSrc", "src" );
+
+
+var clearSelection = document.getElementById( "clearSelection" );
+clearSelection.addEventListener( "click", ()=>{
+	window.opener.postMessage( {op:"clearSelection"}, "*" );
+	
+} );
+
 var applyCoords = document.getElementById( "applyCoords" );
 applyCoords.addEventListener( "click", ()=>{
 	window.opener.postMessage( {op:"setLayout", index: selectedDiv._index
@@ -97,7 +131,8 @@ function addOption( list, opt ) {
 	option._index = opt.index;
 	option.rect = opt.rect;
 	option.layout = opt.layout;
-console.log( "option index : ", opt._index, option.text );
+	option.opt = opt;
+	//console.log( "option index : ", opt._index, option.text );
 	list.add(option);
 }
 
@@ -127,7 +162,10 @@ function updateCoords() {
 	rectInfo.layoutLeft.value = selectedDiv.layout.left;	
 	rectInfo.layoutTop.value = selectedDiv.layout.top;	
 	rectInfo.layoutWidth.value = selectedDiv.layout.width;	
-	rectInfo.layoutHeight.value = selectedDiv.layout.height;	
+	rectInfo.layoutHeight.value = selectedDiv.layout.height;
+
+	for( var n = 0; n < textProps.length; n++ ) 
+		textProps[n].textarea.value = selectedDiv.opt[textProps[n].textarea.id];
 }
 
 

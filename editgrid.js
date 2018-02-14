@@ -5,7 +5,11 @@ var strScriptTagId = arrScripts[arrScripts.length - 1];
 //debugger;
 console.log( "HELLO! I have Context?", strScriptTagId )
 
-var origin = strScriptTagId.origin || location.origin;
+if( strScriptTagId.src ) {
+	var filename = strScriptTagId.src.lastIndexOf( "/" );
+	var origin = strScriptTagId.src.substr( 0, filename );
+} else
+	var origin = strScriptTagId.origin || location.origin;
 
 var origin_addr = origin + "/editgrid.js";
 //document.body.addEventListener("load", ()=> {
@@ -43,6 +47,8 @@ var allControls = []
 var controls = []
 var colors = [];
 
+var undo = [];
+
 var root = document.documentElement;
 console.log( root );
 
@@ -64,10 +70,29 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 			if( msg.op == "Hello" ) {
 				postDivs(toolbox_window);
 			}
-			if( msg.op === "select" ) {
+			else if( msg.op === "select" ) {
 				selected_control = allControls[msg.index];
 			}
-			if( msg.op === "setLayout" ) {
+			else if( msg.op === "clearSelection" ) {
+				selected_control = null;
+			}
+			else if( msg.op === "setId" ) {
+				var tmp = allControls[msg.index];
+				tmp.element.id = msg.id;
+			}
+			else if( msg.op === "setHtml" ) {
+				var tmp = allControls[msg.index];
+				tmp.element.innerHTML = msg.innerHtml;
+			}
+			else if( msg.op === "setText" ) {
+				var tmp = allControls[msg.index];
+				tmp.element.innerText = msg.innerText;
+			}
+			else if( msg.op === "setSrc" ) {
+				var tmp = allControls[msg.index];
+				tmp.element.src = msg.src;
+			}
+			else if( msg.op === "setLayout" ) {
 				selected_control = allControls[msg.index];
 				if( msg.layout.left )
 					selected_control.element.style.left = msg.layout.left;
@@ -137,6 +162,12 @@ function setupKeyPress( window ) {
 			console.log( "keydown..." );	
 		}
 	
+		if( key.key == 'z' ) {
+			if( key.ctrlKey ) {
+				Undo();
+			}
+		}
+
 		// ----- keystrokes 'edit' and 'done' to edit things.
 		if( key.key == 'd' || key.key=='D' ) if( collect === '' ) collect += "d";
 		if( key.key == 'o' || key.key=='O') if( collect === 'd' ) collect += "o";
@@ -175,12 +206,47 @@ var selected_control;
 editmesh.addEventListener( "mousedown", (event) => {
 	//console.log( "Mouse Event : ", event );
 	event.preventDefault();
-	mouse_drag = locateTarget( controls, event, 0 );
+	if( selected_control ){ 
+		var nearEdge = 0;
+		if( ( event.clientX - selected_control.rect.left ) < 10 ) {
+			nearEdge |= 1;
+		}
+		if( ( event.clientY - selected_control.rect.top ) < 10 )
+			nearEdge |= 2;
+		if( ( selected_control.rect.bottom - event.clientY ) < 10 )
+			nearEdge |= 4;
+		if( ( selected_control.rect.right - event.clientX ) < 10 )
+			nearEdge |= 8;
+		mouse_drag = { element : selected_control.element, control : selected_control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:0 };
+	} else {
+		mouse_drag = locateTarget( controls, event, 0 );
+		if( mouse_drag && !mouse_drag.element.id )
+			mouse_drag = null;
+	}
+	console.log( "Mouse_drag has changed....", mouse_drag );
 	if( mouse_drag && mouse_drag.nearEdge )  {
 		mouse_size = mouse_drag;
 		mouse_drag = null;
 	}
+
+	if( mouse_drag || mouse_size ) {
+		var undoRecord = { selection: mouse_drag||mouse_size, firstEvent : event
+		     , position: readRect( (mouse_drag||mouse_size).element )  };
+		undo.push( undoRecord );
+	}
   })
+
+
+function Undo() {
+	var lastRec = undo.pop();
+	if( lastRec ) {
+		lastRec.selection.element.style.left = lastRec.position.left +"%";
+		lastRec.selection.element.style.top = lastRec.position.top +"%";
+		lastRec.selection.element.style.width = lastRec.position.width +"%";
+		lastRec.selection.element.style.height = lastRec.position.height +"%";
+		updateRects( lastRec.selection.control );
+	}
+}
 
 editmesh.addEventListener( "mouseup", (event) => {
 	//console.log( "Mouse Event : ", event );
@@ -225,14 +291,14 @@ function getOffset( el ) {
 	//var rect = c.getBoundingClientRect();
 	var ofs = getOffset( c );
 	var rect = control.rect;//{ top:ofs.top, left:ofs.left, bottom:ofs.top+c.clientHeight, right:ofs.left+c.clientWidth };
-	var nearEdge = 0;
-      if( //c.id 
-	 event.clientX >= rect.left
+      if( ( c.id || control.child )
+	&& event.clientX >= rect.left
         && event.clientX < rect.right
         && event.clientY >= rect.top
         && event.clientY < rect.bottom ) {
 	var result;
 	//console.log( "in element: ", rect );
+	var nearEdge = 0;
 	if( ( event.clientX - rect.left ) < 10 ) {
 		nearEdge |= 1;
 	}
@@ -245,7 +311,10 @@ function getOffset( el ) {
 	//console.log( "look for a deepr control..." );
 	 if( !(result=locateTarget2( control.child, event, ++level )) ) {
 	        //console.log( "not in a deeper control...")
-	        return  { element : c, control : control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:level };
+		if( c.id ) 
+		        return  { element : c, control : control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:level };
+		else
+			return result;
 	}
 	else {
 	        //console.log( "in a deeper control...", result)
@@ -268,15 +337,16 @@ function getOffset( el ) {
 
 	function getWidth( width, element ) {
 		if( width.includes("px") )
-			return parseInt( width.replace('px', ''), 10);
+			return Number( width.replace('px', ''));
 	 	
 		if( width.includes("%") ) {
 			
-			return parseInt( width, 10);
+			return Number( width );
 		}
 	}
 
-	function readRect( mouseEvent, element ) {
+
+	function readRect( element ) {
 		var r = { left: 0, width : 0, top: 0, height : 0, px : 0, py : 0 };
 		var val;
 		var parent = element.parentElement;
@@ -284,39 +354,56 @@ function getOffset( el ) {
 		if( val.includes("px") ) {
 			r.left = 100 * getWidth( parent.style.width ) / ( parseInt( val.replace('px', ''), 10) ) ;
 		} else if( val.includes( "%" ) ) {
-			r.left = parseInt( val, 10 );
+			r.left = parseFloat ( val, 10 );
 		}
 		val = element.style.top;
 		if( val.includes("px") ) {
 			r.top = 100 * getWidth( parent.style.height ) / ( parseInt( val.replace('px', ''), 10) ) ;
 		} else if( val.includes( "%" ) ) {
-			r.top = parseInt( val, 10 );
+			r.top = parseFloat ( val, 10 );
 		}
 		val = element.style.width;
 		if( val.includes("px") ) {
 			r.width = 100 * getWidth( parent.style.width ) / ( parseInt( val.replace('px', ''), 10) ) ;
 		} else if( val.includes( "%" ) ) {
-			r.width = parseInt( val, 10 );
+			r.width = parseFloat ( val, 10 );
 		}
 		val = element.style.height;
 		if( val.includes("px") ) {
 			r.height = 100 * getWidth( parent.style.height ) / ( parseInt( val.replace('px', ''), 10) ) ;
 		} else if( val.includes( "%" ) ) {
-			r.height = parseInt( val, 10 );
+			r.height = parseFloat ( val, 10 );
 		}
 		return r;
 	}
 
+
+	function updateRects( control ) {
+		while( control ) {
+			var staticRect = control.element.getBoundingClientRect();
+			var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
+			rect.left += control.rectOffset.left;
+			rect.top += control.rectOffset.top;
+			rect.right += control.rectOffset.left;
+			rect.bottom += control.rectOffset.top;
+		
+        	        Object.assign( control.rect, rect );
+			if( control.child )
+				updateRects( control.child )
+			control = control.elder;
+		}
+		
+	}
 
     editmesh.addEventListener( "mousemove", (event) => {
 	mouse_over = locateTarget( controls, event, 0 );
         //console.log( "Mouse Move Event : ", (mouse_drag)?"DRAG":"" );
 	if( mouse_size ) {
 		event.preventDefault();
-		var deltaX = event.clientX - mouse_size.x;
-        	var deltaY = event.clientY - mouse_size.y;
+		var deltaX = 100*(event.clientX - mouse_size.x) / mouse_size.control.pr.width;
+        	var deltaY = 100*(event.clientY - mouse_size.y)/mouse_size.control.pr.height;
 
-		var rect = readRect( event, mouse_size.element );
+		var rect = readRect( mouse_size.element );
 		if( mouse_size.nearEdge & 1 ) {
 			mouse_size.element.style.left = rect.left + deltaX+ "%";
 			mouse_size.element.style.width = rect.width - deltaX+ "%";
@@ -332,18 +419,23 @@ function getOffset( el ) {
 		if( mouse_size.nearEdge & 8 ) {
 			mouse_size.element.style.width = rect.width + deltaX + "%";
 		}
+		updateRects( mouse_size.control );
+		drawControls();
+
 		mouse_size.x = event.clientX;
 		mouse_size.y = event.clientY;
 	}
         if( mouse_drag ) {
 		event.preventDefault();
-		var deltaX = 100 * ( event.clientX - mouse_drag.x ) / controls[0].rect.width;
-        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / controls[0].rect.height;
-		var left = parseInt(mouse_drag.element.style.left.replace('%', ''), 10)||0;
-		var top = parseInt(mouse_drag.element.style.top.replace('%', ''), 10)||0;
-		var c = mousePercent( mouse_drag, event );
-	        mouse_drag.element.style.left =(left - ((mouse_drag.x-event.clientX)/10))+"%";
-        	mouse_drag.element.style.top = (top - ((mouse_drag.y-event.clientY) / 10))+"%";
+
+		var deltaX = 100 * ( event.clientX - mouse_drag.x ) / mouse_drag.control.pr.width;
+        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / mouse_drag.control.pr.height;
+		var left = Number(mouse_drag.element.style.left.replace('%', ''))||0;
+		var top = Number(mouse_drag.element.style.top.replace('%', ''))||0;
+		//var c = mousePercent( mouse_drag, event );
+
+	        mouse_drag.element.style.left =(left +deltaX)+"%";//- ((mouse_drag.x-event.clientX)/10))+"%";
+        	mouse_drag.element.style.top = (top  +deltaY)+"%";//- ((mouse_drag.y-event.clientY) / 10))+"%";
 
 		var staticRect = mouse_drag.element.getBoundingClientRect();
 		var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
@@ -353,6 +445,8 @@ function getOffset( el ) {
 		rect.right += mouse_drag.control.rectOffset.left;
 		rect.bottom += mouse_drag.control.rectOffset.top;
                 Object.assign( mouse_drag.control.rect, rect );
+		updateRects( mouse_drag.control.child );
+		drawControls();
 		
 	//console.log( "rect top:", mouse_drag.control.rect.top, mouse_drag.element.style.top, staticRect.top );
 	
@@ -478,10 +572,10 @@ function Control( element, rect, rectOffset ) {
 }
 
 function fixLayout(c) {
-var e = c.element;
-var p = e.parentElement;
-var er = e.getBoundingClientRect();
-var pr = p.getBoundingClientRect();
+	var e = c.element;
+	var p = e.parentElement;
+	var er = e.getBoundingClientRect();
+	var pr = p.getBoundingClientRect();
 
 	c.pr = pr;
 	c.er = er;
@@ -510,23 +604,26 @@ function postDivs( w ) {
 	function postDiv(control){
 		if( !control ) return;
 
-try {
-	var id = control.element.id;
-	var altId = control.element.nodeName + " " + control.element.style.width + " x " + control.element.style.height;
-		w.postMessage( {op:"div",
-			id:id,
-			altId:altId,
-			gen:control.level,
-			rect:control.rect,
-			layout : { left : control.element.style.left,
-				top :control.element.style.top, 
-				width:control.element.style.width ,
-				height : control.element.style.height },
-			index:control.index}
-			, origin_addr );
-}catch( err ) {
-	console.log ("POST MESSAGE PUKED:", err );
-}
+		try {
+			var id = control.element.id;
+			var altId = control.element.nodeName + " " + control.element.style.width + " x " + control.element.style.height;
+				w.postMessage( {op:"div",
+					id:id,
+					altId:altId,
+					gen:control.level,
+					rect:control.rect,
+					layout : { left : control.element.style.left,
+						top :control.element.style.top, 
+						width:control.element.style.width ,
+						height : control.element.style.height },
+					innerHTML : control.element.innerHTML,
+					innerText : control.element.innerText,
+					src : control.element.src,
+					index:control.index}
+					, origin_addr );
+		}catch( err ) {
+			console.log ("POST MESSAGE PUKED:", err );
+		}
 		postDiv( control.elder );
 		postDiv( control.child );
 	}	
@@ -569,26 +666,28 @@ function drawControl(control){
 			else
 				stroke[3] = "red";
 	}
-	if( selected_control === mouse_drag ) {
+	if( ( mouse_drag && ( mouse_drag.control == control ) ) 
+	  || ( mouse_size && ( mouse_size.control == control ) ) ) {
+		var thisControl = mouse_drag || mouse_size;
 		stroke_width = 4;
-			if( mouse_over && mouse_over.nearEdge & 1 ) 
+			if( thisControl && thisControl.nearEdge & 1 ) 
 				stroke[0] = "white";
 			else
 				stroke[0] = "blue";
-			if( mouse_over && mouse_over.nearEdge & 2 ) 
+			if( thisControl && thisControl.nearEdge & 2 ) 
 				stroke[1] = "yellow";
 			else
 				stroke[1] = "blue";
-			if( mouse_over && mouse_over.nearEdge & 4 ) 
+			if( thisControl && thisControl.nearEdge & 4 ) 
 				stroke[2] = "yellow";
 			else
 				stroke[2] = "blue";
-			if( mouse_over && mouse_over.nearEdge & 8 ) 
+			if( thisControl && thisControl.nearEdge & 8 ) 
 				stroke[3] = "yellow";
 			else
 				stroke[3] = "blue";
 	}
-	if( /*( selected_control === mouse_drag ) && */ mouse_over && mouse_over.element === control.element )  {
+	else if( ( !selected_control && !mouse_drag ) && mouse_over && mouse_over.element === control.element )  {
 		stroke_width = 3;
 		if( mouse_over.nearEdge ) {
 			if( mouse_over.nearEdge & 1 ) 
@@ -622,39 +721,48 @@ function drawControl(control){
 			stroke[2] = "black";
 			stroke[3] = "black";
 	}
-	ctx.lineWidth = stroke_width;
-	ctx.strokeStyle = stroke[1];
-	ctx.beginPath();
-	ctx.moveTo(rect.left,rect.top);
-	ctx.lineTo(rect.right, rect.top);
-	ctx.stroke();
-
-	ctx.strokeStyle = stroke[2];
-	ctx.beginPath();
-	ctx.moveTo(rect.left,rect.bottom);
-	ctx.lineTo(rect.right, rect.bottom);
-	ctx.stroke();
-
-	ctx.strokeStyle = stroke[0];
-	ctx.beginPath();
-	ctx.moveTo(rect.left,rect.top);
-	ctx.lineTo(rect.left, rect.bottom);
-	ctx.stroke();
-
-	ctx.strokeStyle = stroke[3];
-	ctx.beginPath();
-	ctx.moveTo(rect.right,rect.top);
-	ctx.lineTo(rect.right, rect.bottom);
-	ctx.stroke();
+	
+	for( var n = 0; n < 2; n++ ) {
+		ctx.lineWidth = (n==0)?5:stroke_width;
+		ctx.strokeStyle = (n==0)?"white":stroke[1];
+		ctx.beginPath();
+		ctx.moveTo(rect.left-((n==0)?2:0), rect.top + (4 * control.level));
+		ctx.lineTo(rect.right+((n==0)?2:0), rect.top + (4 * control.level));
+		ctx.stroke();
+	        
+		ctx.strokeStyle = (n==0)?"white":stroke[2];
+		ctx.beginPath();
+		ctx.moveTo(rect.left-((n==0)?2:0),rect.bottom - (4 * control.level));
+		ctx.lineTo(rect.right-((n==0)?2:0), rect.bottom  - (4 * control.level));
+		ctx.stroke();
+	        
+		ctx.strokeStyle = (n==0)?"white":stroke[0];
+		ctx.beginPath();
+		ctx.moveTo(rect.left + (4 * control.level),rect.top);
+		ctx.lineTo(rect.left + (4 * control.level), rect.bottom);
+		ctx.stroke();
+	        
+		ctx.strokeStyle = (n==0)?"white":stroke[3];
+		ctx.beginPath();
+		ctx.moveTo(rect.right - (4 * control.level),rect.top);
+		ctx.lineTo(rect.right - (4 * control.level), rect.bottom);
+		ctx.stroke();
+	}
 
 	ctx.font = '24px serif';
-	ctx.fillStyle = 'blue';
+	ctx.fillStyle = 'black';
+	ctx.fillText( control.element.tagName + "#" + control.element.id, rect.left+2,rect.top+2 );
+	ctx.fillStyle = 'white';
 	ctx.fillText( control.element.tagName + "#" + control.element.id, rect.left,rect.top );
 	drawControl( control.elder );
 	drawControl( control.child );
 };
-	setTimeout( drawControls, 250 );
 
+}
+
+function defaultRefresh() {
+	drawControls();
+	setTimeout( defaultRefresh, 250 );
 }
 
 
@@ -725,6 +833,6 @@ function setupControls() {
 setupControls();
 
 //setInterval( tick, 3000 );
-setTimeout( drawControls, 500 );
+defaultRefresh()
 
 }

@@ -2,8 +2,13 @@
 var np = (p)=>{ location.assign(p) };
 
 var peer;
-if ("WebSocket" in window) {
-	peer = `${location.protocol==="https:"?"wss":"ws"}://${location.hostname}:45200/`;
+var usePort = 45200;
+if ("WebSocket" in window) {                                   
+	if( location.protocol === "https:" ) {
+		peer = `wss://${location.hostname}:45201/`;
+		usePort = 45201
+	} else
+		peer = `ws://${location.hostname}:45200/`;
   	openSocket( "scribarium", 0 );
 } else {
   // the browser doesn't support WebSocket.
@@ -35,7 +40,7 @@ function openSocket( protocol, step ) {
                         script.appendChild(document.createTextNode(msg.code));
 			script.id = "editgrid.js";
 			script.ws = ws;
-			script.origin = `${location.protocol}//${location.hostname}:45200`;;
+			script.origin = `${location.protocol}//${location.hostname}:${usePort}`;;
                         document.body.appendChild( script );
                 } else if( msg.op === "userStatus" ) {
 		} else if( msg.op === "newLogin" ) {
