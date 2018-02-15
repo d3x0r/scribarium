@@ -7,10 +7,12 @@ var strScriptTagId = arrScripts[arrScripts.length - 1];
 //console.log( "HELLO! I have Context?", strScriptTagId )
 
 var origin;
-if( strScriptTagId.origin ) 
+if( strScriptTagId.origin )  {
+	console.log( "had a origin from external:", strScriptTagId.origin );
 	var origin = strScriptTagId.origin || location.origin;
-else {
+} else {
 	// get relative origin to next thing....
+	console.log( "Have to figure it out from src?", strScriptTagId.src );
 	var filename = strScriptTagId.src.lastIndexOf( "/" );
 	var origin = strScriptTagId.src.substr( 0, filename );
 }
@@ -27,8 +29,9 @@ if( "ws" in strScriptTagId ) {
 
 //var origin_addr = "http://localhost:45200/editgrid.js";
 //var origin_addr = "https://localhost:45201/editgrid.js";
-var origin_addr = origin + "/editgrid.js";
+var origin_addr = origin.replace( "wss:", "https:" ).replace( "ws:", "http:" ) + "/editgrid.js";
 
+console.log( "ORigin:", origin, origin_addr );
 //document.body.addEventListener("load", ()=> {
 
 var require_required = false;
@@ -94,6 +97,10 @@ console.log( root );
 
 //var toolbox_window = window.open("toolbox.js");
 if( !location.pathname.includes( "editor/toolbox.html" ) ) {
+	origin = origin.replace( "wss:", "https:" );
+	origin = origin.replace( "ws:", "http:" );
+	console.log( "origin is now:", origin );
+	console.log( "Launch Popup:", origin + "/toolbox.html" );
 	var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
 
 	window.addEventListener( 'message', ProcessChildMessage );

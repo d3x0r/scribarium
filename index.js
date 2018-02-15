@@ -65,7 +65,7 @@ function webSockConnected( server, ws ) {
 }
 
 function handleMessage( msg ) {
-	console.log( "GOT:", typeof msg, msg );
+	//console.log( "GOT:", typeof msg, msg );
 	msg = sack.JSON6.parse( msg );
 	if( msg.op === "loadEditor" ) {
 		if( msg.url )

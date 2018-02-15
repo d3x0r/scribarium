@@ -40,7 +40,7 @@ function openSocket( protocol, step ) {
                         script.appendChild(document.createTextNode(msg.code));
 			script.id = "editgrid.js";
 			script.ws = ws;
-			script.origin = `${location.protocol}//${location.hostname}:${usePort}`;;
+			script.origin = peer;//`${location.protocol}//${location.hostname}:${usePort}`;;
                         document.body.appendChild( script );
                 } else if( msg.op === "userStatus" ) {
 		} else if( msg.op === "newLogin" ) {
