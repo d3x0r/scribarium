@@ -41,16 +41,16 @@ function ProcessParentMessage(message) {
 		var msg = message.data;
 		if( msg.op === "style" ) {
 			addStyleOption( allStyles, msg );
+		} else if( msg.op === "script" ) {
+			addScriptOption( allScripts, msg );
 		} else if( msg.op === "div" ) {
 			//controlMap.set( 
 			if( msg.id )  {
 				addOption( namedDivs, msg );
 				addOption( allDivs, msg );
-				namedDivIDs.push( msg.index );
 			}
 			else {
 				addOption( allDivs, msg );
-				allDivIDs.push( msg.index );
 			}
 		}
 	} catch( err ) {
@@ -61,14 +61,13 @@ function ProcessParentMessage(message) {
 //---------------------------------------------------------------------
 // Init the tool widgets - listboxes 
 //-------------------------------------------------------------
-var namedDivIDs = [];
-var allDivIDs = [];
-var allStyleIDs = [];
 
 var namedDivs = document.getElementById( "namedDivs" );
 var allDivs = document.getElementById( "allDivs" );
 var allStyles = document.getElementById( "styles" );
+var allScripts = document.getElementById( "scripts" );
 var currentStyle = document.getElementById( "currentStyle" );
+var currentScript = document.getElementById( "currentScript" );
 
 var rectInfo = { 
 	left : document.getElementById( "leftCoord" ),
@@ -108,6 +107,45 @@ addSetThing( "setHtml", "innerHtml" );
 addSetThing( "setText", "innerText" );
 addSetThing( "setSrc", "src" );
 addSetThing( "setClass", "class" );
+addSetThing( "setStyle", "style" );
+
+var createStyle = document.getElementById( "createStyle" );
+createStyle.addEventListener( "click", ()=>{
+	var val = prompt( "Enter new style selector", "" );
+	if( val ) {
+		var style;
+		addStyleOption( allStyles, style = { selectorText : val, cssText : "" } );
+		window.opener.postMessage( {op:"createStyleRule", style:style }, "*" );
+	}
+} );
+
+var updateStyle = document.getElementById( "updateStyle" );
+updateStyle.addEventListener( "click", ()=>{
+	if( selectedStyle ) {
+		selectedStyle.opt.cssText = currentStyle.value;
+		window.opener.postMessage( {op:"setStyleRule", style:selectedStyle.opt }, "*" );
+	}
+} );
+
+// ---------- create Script
+
+var createStyle = document.getElementById( "createScript" );
+createStyle.addEventListener( "click", ()=>{
+	var val = prompt( "Enter new script src", "" );
+	if( val ) {
+		var style;
+		addScriptOption( allScripts, script = { src : val } );
+		window.opener.postMessage( {op:"createScript", src:script.src }, "*" );
+	}
+} );
+
+var updateStyle = document.getElementById( "updateScript" );
+updateStyle.addEventListener( "click", ()=>{
+	if( selectedStyle ) {
+		selectedScript.opt.src = currentScript.value;
+		window.opener.postMessage( {op:"setScriptsrc", style:selectedStyle.opt }, "*" );
+	}
+} );
 
 
 var clearSelection = document.getElementById( "clearSelection" );
@@ -128,9 +166,20 @@ applyCoords.addEventListener( "click", ()=>{
 
 var selectedDiv = null;
 var selectedStyle = null;
+allScripts.onchange = scriptSelect
 allStyles.onchange = styleSelect
 namedDivs.onchange = namedSelect
 allDivs.onchange = allSelect
+
+function addScriptOption( list, opt ) {
+	var option = document.createElement("option");
+	//console.log( "Add style:", opt );
+	option.text = opt.src;
+	option.opt = opt;
+	//console.log( "option index : ", opt._index, option.text );
+	list.add(option);
+}
+
 
 function addStyleOption( list, opt ) {
 	var option = document.createElement("option");
@@ -153,6 +202,11 @@ function addOption( list, opt ) {
 	option.opt = opt;
 	//console.log( "option index : ", opt._index, option.text );
 	list.add(option);
+}
+
+function scriptSelect() {
+	selectedScript = allScripts.options[allScripts.selectedIndex];
+	currentScript.value = selectedScript.opt.src;
 }
 
 function styleSelect() {

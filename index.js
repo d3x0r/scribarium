@@ -1,7 +1,8 @@
 const _debug = true;
 
-var sack = require( "sack.vfs" );
-var vol = sack.Volume();
+const sack = require( "sack.vfs" );
+const vol = sack.Volume();
+const db = require ("./db.js" );
 
 //------ setup websocket compatibility
 const WS = sack.WebSocket.readyStates; // WS.OPEN, WS.OPENING, WS.CLOSED,...
@@ -66,8 +67,17 @@ function webSockConnected( server, ws ) {
 function handleMessage( msg ) {
 	console.log( "GOT:", typeof msg, msg );
 	msg = sack.JSON6.parse( msg );
-	if( msg.op === "loadEditor" ) 
+	if( msg.op === "loadEditor" ) {
+		if( msg.url )
+			this.page = db.loadPage( msg.url );
 		this.send( `{"op":"script","code":${JSON.stringify(vol.read( "editgrid.js" ).toString())}}`);
+	}
+	if( msg.op === "sync" ) {
+        	this.send( `{"op":"page","page":${JSON.stringify( this.page ) }}` );
+	}
+	if( msg.op === "div" ) {
+		db.storeControl( this.page, msg );
+	}
 	if( msg.op === "save" ) {
 	}
 }

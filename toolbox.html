@@ -15,10 +15,23 @@ ID'd controls.... all controls.... Style classes....<BR>
 <select ID="allDivs" name="allDivs" size="15">
 </select>
 
-
+<div STYLE="display:inline-block">
 <select ID="styles" name="styles" size="15"></select>
 <TEXTAREA ID="currentStyle" cols="40" rows="16"></TEXTAREA>
+<DIV STYLE="display:inline-block;valign:top">
+<Button ID="createStyle">Create Style</BUTTON><br>
+<Button ID="updateStyle">Update Style</BUTTON>
+</DIV>
+</div>
 
+<div STYLE="display:inline-block">
+<select ID="scripts" name="scripts" size="10"></select><br>
+<DIV STYLE="display:inline-block;valign:top">
+<INPUT ID="currentScript" size="35"></INPUT><br>
+<Button ID="createScript">Create Script</BUTTON>
+<Button ID="updateScript">Update Script</BUTTON>
+</DIV>
+</div>
 
 <br>
 Physical<BR>
@@ -45,9 +58,15 @@ Height:<input ID="heightLayoutCoord"></INPUT>
 </DIV>
 
 <DIV>
-<INPUT ID="innerText">... text...</INPUT>
+<TEXTAREA ID="style" size="120" rows="5" cols="40">...Style...</TEXTAREA>
+<BUTTON ID="setStyle">Set Style</BUTTON>
+</DIV>
+
+<DIV>
+<INPUT ID="innerText">... Text...</INPUT>
 <BUTTON ID="setText">Set Text</BUTTON>
 </DIV>
+
 <DIV>
 <INPUT ID="src" length=30>... src...</INPUT>
 <BUTTON ID="setSrc">Set Source</BUTTON>

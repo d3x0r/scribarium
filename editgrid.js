@@ -1,25 +1,60 @@
 "use strict";
+const _debug = false;
 
 var arrScripts = document.getElementsByTagName('script');
 var strScriptTagId = arrScripts[arrScripts.length - 1];
 //debugger;
 //console.log( "HELLO! I have Context?", strScriptTagId )
 
-if( strScriptTagId.src ) {
+var origin;
+if( strScriptTagId.origin ) 
+	var origin = strScriptTagId.origin || location.origin;
+else {
+	// get relative origin to next thing....
 	var filename = strScriptTagId.src.lastIndexOf( "/" );
 	var origin = strScriptTagId.src.substr( 0, filename );
-} else
-	var origin = strScriptTagId.origin || location.origin;
+}
+
+var ws = null;
+if( "ws" in strScriptTagId ) {
+	var handleMessageExport = null
+	function handleMessages( ws, msg, _msg ) {
+		handleMessageExport(ws,msg,_msg);
+	}
+	( ws = strScriptTagId.ws ).extraHandler = handleMessages;
+	strScriptTagId.ws.send( '{"op":"sync"}' );
+}
 
 //var origin_addr = "http://localhost:45200/editgrid.js";
-var origin_addr = "https://localhost:45201/editgrid.js";
+//var origin_addr = "https://localhost:45201/editgrid.js";
+var origin_addr = origin + "/editgrid.js";
 
-//var origin_addr = origin + "/editgrid.js";
 //document.body.addEventListener("load", ()=> {
 
 var require_required = false;
 setupGrid();
+//---------------------------------------------------------------------------
+// The remainider of this script is all within this function as a context.
+//---------------------------------------------------------------------------
+
+
 function setupGrid() {
+
+window.addEventListener( "resize", handleResize );
+
+function handleResize() {
+		for( var a = 0; a < 1; a++ ) {
+			var meshrect = editmesh.getBoundingClientRect();
+		        editmesh.width = meshrect.right - meshrect.left;
+		        editmesh.height = meshrect.bottom - meshrect.top;
+		        console.log( "First Init", meshrect );
+		}
+	for( var c = 0; c < controls.length; c++ )
+		updateRects( controls[c] );
+	if( editmesh )
+		drawControls();
+
+}
 
 if( !("require" in window) ) {
 	if( !require_required ) {
@@ -46,6 +81,7 @@ if( !("require" in window) ) {
 
 
 var styles = []; // these are styles for the page.....
+var allScripts = [];
 var allControls = [];
 var controls = []
 var colors = [];
@@ -58,23 +94,21 @@ console.log( root );
 
 //var toolbox_window = window.open("toolbox.js");
 if( !location.pathname.includes( "editor/toolbox.html" ) ) {
-	console.log( "something..." );
-	//var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
-	var toolbox_window = window.open( "https://localhost:45201/toolbox.html", "editor_toolbox" );
-	//var toolbox_window = window.open( "https://localhost:45200/toolbox.html", "editor_toolbox" );
-	//var
-	//toolbox_window._origin = toolbox_window.location.href;
+	var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
 
 	window.addEventListener( 'message', ProcessChildMessage );
-	//.toolbox_window.
+
+	//toolbox_window.postMessage( '{op:"connected"}', toolbox_window.location.href );
+
 	function ProcessChildMessage(message) {
 		// do something with the message
-		console.log( "Parent Message:", message );
+		_debug && console.log( "Parent Message:", message );
 		try {
 			var msg = message.data;
 			if( msg.op == "Hello" ) {
 				postDivs(toolbox_window);
 				postStyles(toolbox_window);
+				postScripts(toolbox_window);
 			}
 			else if( msg.op === "select" ) {
 				selected_control = allControls[msg.index];
@@ -84,22 +118,41 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 			}
 			else if( msg.op === "setId" ) {
 				var tmp = allControls[msg.index];
+
+				var undoRecord = { control: tmp, id: tmp.element.id };
+				undo.push( undoRecord );
+
 				tmp.element.id = msg.id;
+                                
+			}
+			else if( msg.op === "setClass" ) {
+				var tmp = allControls[msg.index];
+				var undoRecord = { control: tmp, class: tmp.element.class };
+				undo.push( undoRecord );
+				tmp.element.class = msg.class;
 			}
 			else if( msg.op === "setHtml" ) {
 				var tmp = allControls[msg.index];
+				var undoRecord = { control: tmp, innerHtml: tmp.element.innerHtml };
+				undo.push( undoRecord );
 				tmp.element.innerHTML = msg.innerHtml;
 			}
 			else if( msg.op === "setText" ) {
 				var tmp = allControls[msg.index];
+				var undoRecord = { control: tmp, innerText: tmp.element.innerText };
+				undo.push( undoRecord );
 				tmp.element.innerText = msg.innerText;
 			}
 			else if( msg.op === "setSrc" ) {
 				var tmp = allControls[msg.index];
+				var undoRecord = { control: tmp, src: tmp.element.src };
+				undo.push( undoRecord );
 				tmp.element.src = msg.src;
 			}
 			else if( msg.op === "setLayout" ) {
 				selected_control = allControls[msg.index];
+				var undoRecord = { control: selected_control, layout :  readRect( selected_control.element ) };
+				undo.push( undoRecord );
 				if( msg.layout.left )
 					selected_control.element.style.left = msg.layout.left;
 				if( msg.layout.top )
@@ -108,8 +161,18 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 					selected_control.element.style.width = msg.layout.width;
 				if( msg.layout.height )
 					selected_control.element.style.height = msg.layout.height;
-			}
-			toolbox_window.postMessage( '{op:"connected"}', toolbox_window.location.href );
+			} else if( msg.op === "createStyleRule" ) {
+				if( document.styleSheets.length ) {
+					document.styleSheets[0].addRule( selector, "" );
+					styles.push( { index : styles.length, style:document.styleSheets[0].rules[document.styleSheets[0].rules.length-1], text:msg.style.selectorText } );
+				}
+
+				//var s = document.createElement( "
+			} else if( msg.op === "setStyleRule" ) {
+				var style = styles[msg.index];
+				style.style.cssText = msg.style.cssText;
+				
+			}	
 
 		} catch(err) {
 		}
@@ -117,28 +180,159 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 
 }
 
-var gameContainer = document.createElement( "div" );
-gameContainer.style.border = 0;
-gameContainer.style.position = "absolute";
-gameContainer.style.left = 0;
-gameContainer.style.top = 0;
-gameContainer.style.width = "100%";
-gameContainer.style.height = "100%";
-gameContainer.style.zIndex = 10000;
 
-var editmesh = document.createElement( "canvas" );
-
-
-gameContainer.appendChild( editmesh );
-editmesh.style.objectFit = "cover";
-editmesh.style.width = "100%";
-editmesh.style.height = "100%";
-editmesh.width = 1920;
-editmesh.height = 1080;
-editmesh.style.border = 0;
-
+var gameContainer;
+var editmesh;
 var visible = false;
-gameContainer.style.visibility = "visible";
+var ctx;  // this is what to draw on...
+
+var mouse_drag;
+var mouse_size;
+var mouse_over;
+var selected_control;
+
+
+
+function addEditor() {
+	if( !gameContainer ) {
+		gameContainer = document.createElement( "div" );
+		gameContainer.style.border = 0;
+		gameContainer.style.position = "absolute";
+		gameContainer.style.left = 0;
+		gameContainer.style.top = 0;
+		gameContainer.style.width = "100%";
+		gameContainer.style.height = "100%";
+		gameContainer.style.zIndex = 10000;
+	        
+		editmesh = document.createElement( "canvas" );
+	        
+		gameContainer.appendChild( editmesh );
+		editmesh.style.objectFit = "cover";
+		editmesh.style.width = "100%";
+		editmesh.style.height = "100%";
+		editmesh.width = 1920;
+		editmesh.height = 1080;
+		editmesh.style.border = 0;
+
+		ctx=editmesh.getContext("2d");
+
+		editmesh.addEventListener( "mouseup", (event) => {
+			if( !visible ) return;
+			//console.log( "Mouse Event : ", event );
+			event.preventDefault();
+			mouse_drag = null;//locateTarget( document.body.childNodes, event );
+			mouse_size = null;//locateTarget( document.body.childNodes, event );
+		})
+
+		editmesh.addEventListener( "mousedown", (event) => {
+			//console.log( "Mouse Event : ", event );
+			if( !visible ) return;
+			event.preventDefault();
+			if( selected_control ){
+				var nearEdge = 0;
+				if( ( event.clientX - selected_control.rect.left ) < 10 ) {
+					nearEdge |= 1;
+				}
+				if( ( event.clientY - selected_control.rect.top ) < 10 )
+					nearEdge |= 2;
+				if( ( selected_control.rect.bottom - event.clientY ) < 10 )
+					nearEdge |= 4;
+				if( ( selected_control.rect.right - event.clientX ) < 10 )
+					nearEdge |= 8;
+				mouse_drag = { element : selected_control.element, control : selected_control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:0 };
+			} else {
+				mouse_drag = locateTarget( controls, event, 0 );
+				if( mouse_drag && !mouse_drag.element.id )
+					mouse_drag = null;
+			}
+			console.log( "Mouse_drag has changed....", mouse_drag );
+			if( mouse_drag && mouse_drag.nearEdge )  {
+				mouse_size = mouse_drag;
+				mouse_drag = null;
+			}
+
+			if( mouse_drag || mouse_size ) {
+				var undoRecord = { selection: mouse_drag||mouse_size, firstEvent : event
+				     , position: readRect( (mouse_drag||mouse_size).element )  };
+				undo.push( undoRecord );
+			}
+		})
+
+		editmesh.addEventListener( "mousemove", (event) => {
+			if( !visible ) return;
+			mouse_over = locateTarget( controls, event, 0 );
+                        //console.log( "Mouse Move Event : ", (mouse_drag)?"DRAG":"" );
+			if( mouse_size ) {
+				event.preventDefault();
+				var deltaX = 100*(event.clientX - mouse_size.x) / mouse_size.control.pr.width;
+                        	var deltaY = 100*(event.clientY - mouse_size.y)/mouse_size.control.pr.height;
+
+				var rect = readRect( mouse_size.element );
+				if( mouse_size.nearEdge & 1 ) {
+					mouse_size.element.style.left = rect.left + deltaX+ "%";
+					mouse_size.element.style.width = rect.width - deltaX+ "%";
+				}
+				if( mouse_size.nearEdge & 2 ) {
+					mouse_size.element.style.top = rect.top + deltaY+ "%";
+					mouse_size.element.style.height = rect.height - deltaY+ "%";
+				}
+				if( mouse_size.nearEdge & 4 ) {
+					//mouse_size.element.style.top = top + deltaY;
+					mouse_size.element.style.height = rect.height + deltaY+ "%";
+				}
+				if( mouse_size.nearEdge & 8 ) {
+					mouse_size.element.style.width = rect.width + deltaX + "%";
+				}
+				updateRects( mouse_size.control );
+				if( editmesh )
+					drawControls();
+
+				mouse_size.x = event.clientX;
+				mouse_size.y = event.clientY;
+			}
+                        if( mouse_drag ) {
+				event.preventDefault();
+
+				var deltaX = 100 * ( event.clientX - mouse_drag.x ) / mouse_drag.control.pr.width;
+                        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / mouse_drag.control.pr.height;
+				var left = Number(mouse_drag.element.style.left.replace('%', ''))||0;
+				var top = Number(mouse_drag.element.style.top.replace('%', ''))||0;
+				//var c = mousePercent( mouse_drag, event );
+
+			        mouse_drag.element.style.left =(left +deltaX)+"%";//- ((mouse_drag.x-event.clientX)/10))+"%";
+                        	mouse_drag.element.style.top = (top  +deltaY)+"%";//- ((mouse_drag.y-event.clientY) / 10))+"%";
+
+				var staticRect = mouse_drag.element.getBoundingClientRect();
+				var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
+
+				rect.left += mouse_drag.control.rectOffset.left;
+				rect.top += mouse_drag.control.rectOffset.top;
+				rect.right += mouse_drag.control.rectOffset.left;
+				rect.bottom += mouse_drag.control.rectOffset.top;
+                                Object.assign( mouse_drag.control.rect, rect );
+				updateRects( mouse_drag.control.child );
+				if( editmesh )
+					drawControls();
+
+			//console.log( "rect top:", mouse_drag.control.rect.top, mouse_drag.element.style.top, staticRect.top );
+
+				mouse_drag.x = event.clientX;
+				mouse_drag.y = event.clientY;
+
+				// e is readonly...
+			//mouse_drag.e.clientX = event.clientX;
+			//mouse_drag.e.clientY = event.clientY;
+
+                        }
+		      })
+
+
+		document.body.appendChild( gameContainer );
+		handleResize();
+		defaultRefresh();
+	}        
+	gameContainer.style.visibility = visible?"visible":"hidden";
+}
 
 function setupKeyPress( window ) {
 	var collect = '';
@@ -192,9 +386,9 @@ function setupKeyPress( window ) {
 		if( key.key == 't' || key.key=='T') 
 			if( collect === 'edi' ) { 
 				collect = ''; 
-				gameContainer.style.visibility = "visible"; 
 				visible = true;
-				drawControls();
+				addEditor();
+				
 			}
 		
 	} );
@@ -203,63 +397,30 @@ function setupKeyPress( window ) {
 setupKeyPress( window );
 
 
-
-var mouse_drag;
-var mouse_size;
-var mouse_over;
-var selected_control;
-
-editmesh.addEventListener( "mousedown", (event) => {
-	//console.log( "Mouse Event : ", event );
-	event.preventDefault();
-	if( selected_control ){ 
-		var nearEdge = 0;
-		if( ( event.clientX - selected_control.rect.left ) < 10 ) {
-			nearEdge |= 1;
-		}
-		if( ( event.clientY - selected_control.rect.top ) < 10 )
-			nearEdge |= 2;
-		if( ( selected_control.rect.bottom - event.clientY ) < 10 )
-			nearEdge |= 4;
-		if( ( selected_control.rect.right - event.clientX ) < 10 )
-			nearEdge |= 8;
-		mouse_drag = { element : selected_control.element, control : selected_control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:0 };
-	} else {
-		mouse_drag = locateTarget( controls, event, 0 );
-		if( mouse_drag && !mouse_drag.element.id )
-			mouse_drag = null;
-	}
-	console.log( "Mouse_drag has changed....", mouse_drag );
-	if( mouse_drag && mouse_drag.nearEdge )  {
-		mouse_size = mouse_drag;
-		mouse_drag = null;
-	}
-
-	if( mouse_drag || mouse_size ) {
-		var undoRecord = { selection: mouse_drag||mouse_size, firstEvent : event
-		     , position: readRect( (mouse_drag||mouse_size).element )  };
-		undo.push( undoRecord );
-	}
-  })
-
-
 function Undo() {
 	var lastRec = undo.pop();
 	if( lastRec ) {
-		lastRec.selection.element.style.left = lastRec.position.left +"%";
-		lastRec.selection.element.style.top = lastRec.position.top +"%";
-		lastRec.selection.element.style.width = lastRec.position.width +"%";
-		lastRec.selection.element.style.height = lastRec.position.height +"%";
-		updateRects( lastRec.selection.control );
+		if( lastRec.selection ) {
+			lastRec.selection.element.style.left = lastRec.position.left +"%";
+			lastRec.selection.element.style.top = lastRec.position.top +"%";
+			lastRec.selection.element.style.width = lastRec.position.width +"%";
+			lastRec.selection.element.style.height = lastRec.position.height +"%";
+			updateRects( lastRec.selection.control );
+		}
+		if( lastRec.control ) {
+			if( lastRec.id )
+				lastRec.control.element.id = lastRec.id;
+			if( lastRec.class )
+				lastRec.control.element.class = lastRec.class;
+			if( lastRec.src )
+				lastRec.control.element.src = lastRec.src;
+			if( lastRec.innerHtml )
+				lastRec.control.element.innerHtml = lastRec.innerHtml;
+			if( lastRec.innerText )
+				lastRec.control.element.innerText = lastRec.innerText;
+		}
 	}
 }
-
-editmesh.addEventListener( "mouseup", (event) => {
-	//console.log( "Mouse Event : ", event );
-	event.preventDefault();
-	mouse_drag = null;//locateTarget( document.body.childNodes, event );
-	mouse_size = null;//locateTarget( document.body.childNodes, event );
-  })
 
 
 function getOffset( el ) {
@@ -401,94 +562,6 @@ function getOffset( el ) {
 		
 	}
 
-    editmesh.addEventListener( "mousemove", (event) => {
-	mouse_over = locateTarget( controls, event, 0 );
-        //console.log( "Mouse Move Event : ", (mouse_drag)?"DRAG":"" );
-	if( mouse_size ) {
-		event.preventDefault();
-		var deltaX = 100*(event.clientX - mouse_size.x) / mouse_size.control.pr.width;
-        	var deltaY = 100*(event.clientY - mouse_size.y)/mouse_size.control.pr.height;
-
-		var rect = readRect( mouse_size.element );
-		if( mouse_size.nearEdge & 1 ) {
-			mouse_size.element.style.left = rect.left + deltaX+ "%";
-			mouse_size.element.style.width = rect.width - deltaX+ "%";
-		}
-		if( mouse_size.nearEdge & 2 ) {
-			mouse_size.element.style.top = rect.top + deltaY+ "%";
-			mouse_size.element.style.height = rect.height - deltaY+ "%";
-		}
-		if( mouse_size.nearEdge & 4 ) {
-			//mouse_size.element.style.top = top + deltaY;
-			mouse_size.element.style.height = rect.height + deltaY+ "%";
-		}
-		if( mouse_size.nearEdge & 8 ) {
-			mouse_size.element.style.width = rect.width + deltaX + "%";
-		}
-		updateRects( mouse_size.control );
-		drawControls();
-
-		mouse_size.x = event.clientX;
-		mouse_size.y = event.clientY;
-	}
-        if( mouse_drag ) {
-		event.preventDefault();
-
-		var deltaX = 100 * ( event.clientX - mouse_drag.x ) / mouse_drag.control.pr.width;
-        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / mouse_drag.control.pr.height;
-		var left = Number(mouse_drag.element.style.left.replace('%', ''))||0;
-		var top = Number(mouse_drag.element.style.top.replace('%', ''))||0;
-		//var c = mousePercent( mouse_drag, event );
-
-	        mouse_drag.element.style.left =(left +deltaX)+"%";//- ((mouse_drag.x-event.clientX)/10))+"%";
-        	mouse_drag.element.style.top = (top  +deltaY)+"%";//- ((mouse_drag.y-event.clientY) / 10))+"%";
-
-		var staticRect = mouse_drag.element.getBoundingClientRect();
-		var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
-		
-		rect.left += mouse_drag.control.rectOffset.left;
-		rect.top += mouse_drag.control.rectOffset.top;
-		rect.right += mouse_drag.control.rectOffset.left;
-		rect.bottom += mouse_drag.control.rectOffset.top;
-                Object.assign( mouse_drag.control.rect, rect );
-		updateRects( mouse_drag.control.child );
-		drawControls();
-		
-	//console.log( "rect top:", mouse_drag.control.rect.top, mouse_drag.element.style.top, staticRect.top );
-	
-		mouse_drag.x = event.clientX;
-		mouse_drag.y = event.clientY;
-
-		// e is readonly...
-	//mouse_drag.e.clientX = event.clientX;
-	//mouse_drag.e.clientY = event.clientY;
-
-        }
-      })
-
-
-
-var meshrect = editmesh.getBoundingClientRect();
-
-var ctx=editmesh.getContext("2d");
-ctx.beginPath();
-ctx.moveTo(0,0);
-ctx.lineTo(300,150);
-ctx.stroke();
-
-document.body.appendChild( gameContainer );
-
-
-        //console.log( meshrect );
-        //console.log( document.documentElement.childNodes );
-
-        //document.documentElement.body.child
-for( var a = 0; a < 1; a++ ) {
-	var meshrect = editmesh.getBoundingClientRect();
-        editmesh.width = meshrect.right - meshrect.left;
-        editmesh.height = meshrect.bottom - meshrect.top;
-        console.log( "First Init", meshrect );
-}
 
 var controlOffset = { left:0, top:0 };
 var virtualParent = undefined;
@@ -605,17 +678,12 @@ function fixLayout(c) {
 	//	e.style.width
 }
 
-function postDivs( w ) {
-	controls.forEach( postDiv );
-	function postDiv(control){
-		if( !control ) return;
-		if( control.elder )
-			postDiv( control.elder );
 
-		try {
+function packDiv( control ) {
 			var id = control.element.id;
 			var altId = control.element.nodeName + " " + control.element.style.width + " x " + control.element.style.height;
-				w.postMessage( {op:"div",
+
+	return {op:"div",
 					id:id,
 					nChild : (control.child?control.child.index:-1),
 					nParent : (control.parent?control.parent.index:-1),
@@ -627,12 +695,24 @@ function postDivs( w ) {
 						top :control.element.style.top, 
 						width:control.element.style.width ,
 						height : control.element.style.height },
-					innerHtml : control.element.innerHTML,
+					innerHtml : control.child?"":control.element.innerHTML,
 					innerText : control.element.innerText,
 					class : control.element.class,
+					style : control.element.style.cssText,
 					src : control.element.src,
 					index:control.index
-				}, origin_addr );
+				}
+}
+
+function postDivs( w ) {
+	controls.forEach( postDiv );
+	function postDiv(control){
+		if( !control ) return;
+		if( control.elder )
+			postDiv( control.elder );
+
+		try {
+			w.postMessage( packDiv( control ), origin_addr );
 		}catch( err ) {
 			console.log ("POST MESSAGE PUKED:", err );
 		}
@@ -645,9 +725,23 @@ function postStyles( w ) {
 	function postStyle(style){
 		try {
 			w.postMessage( {op:"style", 
+				index : style.index,
 				cssText : style.style.cssText,
 				selectorText : style.style.selectorText,
-			} , origin_addr );
+			}, origin_addr );
+		}catch( err ) {
+			console.log ("POST MESSAGE PUKED:", err );
+		}
+	}	
+}
+
+function postScripts( w ) {
+	allScripts.forEach( postScript );
+	function postScript(script){
+		try {
+			w.postMessage( {op:"script", 
+				src : script.src,
+			}, origin_addr );
 		}catch( err ) {
 			console.log ("POST MESSAGE PUKED:", err );
 		}
@@ -787,6 +881,8 @@ function drawControl(control){
 }
 
 function defaultRefresh() {
+	if( !visible ) 
+		return;
 	drawControls();
 	setTimeout( defaultRefresh, 250 );
 }
@@ -798,7 +894,7 @@ function setupStyles() {
 		if( sheet.rules )
 		for( var m = 0; m < sheet.rules.length; m++ ) {
 			var rule = sheet.rules[m];
-			styles.push( { style:rule, text:rule.selectorText } );
+			styles.push( { index : styles.length, style:rule, text:rule.selectorText } );
 		}
 	} 
 
@@ -842,6 +938,14 @@ function setupControls() {
 		}
 		if( "STYLE" === element.nodeName ) {
 		}
+		if( "SCRIPT" === element.nodeName ) {
+			if( element.src ) {
+				var existing = allScripts.find( c=>c.src === element.src );	
+				if( !existing ) 
+		                	allScripts.push( { index : allScripts.length, src : element.src, origin: element.origin } );
+		
+			}
+		}
 		var created = false;
 		if( ["BODY","DIV","IMG","SPAN"].find( tag=>tag === element.nodeName ) ){
 			var existing = allControls.find( c=>c.element === element );	
@@ -877,6 +981,56 @@ function setupControls() {
 setupControls();
 
 //setInterval( tick, 3000 );
-defaultRefresh()
 
+
+function initialPage( page ) {
+
+	allControls.forEach( control=>{
+		var pagecon = page.controls.find( old=>old.index === control.index );
+		if( !pagecon ) {
+			if( ws ) {
+				ws.send( JSON.stringify(packDiv( control )) );
+			}
+		}
+	} );
+
+	page.controls.forEach( savedControl=>{
+        	var mod = savedControl.mods[0];
+		if( !mod ) return;
+                var control = controls[savedControl.index];
+                switch( true ) {
+        	case (mod.setFlags & 1)!=0 :
+                	control.element.id = mod.id;
+                	break;
+        	case (mod.setFlags & 2)!=0 :
+                	control.element.class = mod.class;
+                	break;
+        	case (mod.setFlags & 4)!=0 :
+                	control.element.style.left = mod.layout.left;
+                	control.element.style.top = mod.layout.top;
+                	control.element.style.width = mod.layout.width;
+                	control.element.style.height = mod.layout.height;
+                	break;
+        	case (mod.setFlags & 8)!=0 :
+                	control.element.src = mod.src;
+                	break;
+        	case (mod.setFlags & 16)!=0 :
+                	control.element.innerHTML = mod.innerHtml;
+                	break;
+        	case (mod.setFlags & 32)!=0 :
+                	control.element.innerText = mod.innerText;
+                	break;
+                }
+        } );
+        
 }
+
+function handleMessages( ws, msg, _msg ) {
+	if( msg.op === "page" ) {
+        	initialPage( msg.page );
+	} 
+}
+
+handleMessageExport = handleMessages;
+} // setupGrid()
+

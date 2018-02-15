@@ -31,7 +31,7 @@ function openSocket( protocol, step ) {
 
 	ws.onopen = function() {
         	connected = true;
-       		ws.send( '{op:"loadEditor"}' );
+       		ws.send( `{op:"loadEditor",url:"${location.href}"}` );
 	};
 	ws.onmessage = function (evt) {
 		var msg = JSON.parse( evt.data );
@@ -44,6 +44,8 @@ function openSocket( protocol, step ) {
                         document.body.appendChild( script );
                 } else if( msg.op === "userStatus" ) {
 		} else if( msg.op === "newLogin" ) {
+		} else if( ws.extraHandler ) {
+			ws.extraHandler( ws, msg, evt.data );
 		}
 	};
         ws.onerror = function(err) {
