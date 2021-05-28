@@ -22,6 +22,7 @@ module.exports = exports = function( req, res ) {
 	var contentType = 'text/html';
 	switch (extname) {
 		  case '.js':
+		  case '.mjs':
 			  contentType = 'text/javascript';
 			  break;
 		  case '.css':

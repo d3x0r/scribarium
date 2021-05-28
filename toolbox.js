@@ -1,44 +1,35 @@
 
 
 var require_required = false;
+
+
+import {JSOX} from "./node_modules/jsox/lib/jsox.mjs";
+JSON = JSOX;
+
 setupToolbox();
 function setupToolbox() {
 
-if( !("require" in window) ) {
-	if( !require_required ) {
-		var script = document.createElement( "SCRIPT" );
-		script.src = "../util/require.js";
-		document.body.appendChild( script );
-		window.require = null;
-		require_required = true;
-	}
-	setTimeout( setupToolbox, 10 );
-	return;
-}
-if( !window.require ) {
-	setTimeout( setupToolbox, 10 );
-	return;
-}
 
 
 var controlMap = new Map();
 
-const JSON6 = window.require( "1:/util/json6.js" );
-JSON.parse = JSON6.parse
-
 
 console.log( "How to connect back to other page?" );
 
-window.opener.postMessage( {op:"Hello"}, "*" );
+window.editGrid.setToolbox( {
+text:"This Toolbox Loaded:) ",
+post:ProcessParentMessage,
+                          });
+//window.editGrid.send( {op:"Hello"}, "*" );
 
-window.addEventListener( 'message', ProcessParentMessage , false);
+//window.addEventListener( 'message', ProcessParentMessage , false);
 
 // This function (available in the child code) will be called by the parent
 function ProcessParentMessage(message) {
 	// do something with the message
 	//console.log( "Child Message:", message.data );
 	try {
-		var msg = message.data;
+		var msg = message;//.data;
 		if( msg.op === "style" ) {
 			addStyleOption( allStyles, msg );
 		} else if( msg.op === "script" ) {
@@ -82,7 +73,7 @@ var rectInfo = {
 
 var clearSelection = document.getElementById( "clearSelection" );
 clearSelection.addEventListener( "click", ()=>{
-	window.opener.postMessage( {op:"clearSelection"}, "*" );
+	window.editGrid.send( {op:"clearSelection"}, "*" );
 	allDivs.selectedIndex = -1;
 	namedDivs.selectedIndex = -1;
 	selectedDiv = null;
@@ -97,7 +88,8 @@ function addSetThing( op, altop ) {
 	};
 	textProps.push( idControl );
 	idControl.button.addEventListener( "click", ()=>{
-		window.opener.postMessage( {op:op,index:selectedDiv._index,[altop]:idControl.textarea.value}, "*" );
+    		if( selectedDiv )
+		window.editGrid.send( {op:op,index:selectedDiv._index,[altop]:idControl.textarea.value}, "*" );
 	
 	} );
 }
@@ -115,7 +107,7 @@ createStyle.addEventListener( "click", ()=>{
 	if( val ) {
 		var style;
 		addStyleOption( allStyles, style = { selectorText : val, cssText : "" } );
-		window.opener.postMessage( {op:"createStyleRule", style:style }, "*" );
+		window.editGrid.send( {op:"createStyleRule", style:style }, "*" );
 	}
 } );
 
@@ -123,7 +115,7 @@ var updateStyle = document.getElementById( "updateStyle" );
 updateStyle.addEventListener( "click", ()=>{
 	if( selectedStyle ) {
 		selectedStyle.opt.cssText = currentStyle.value;
-		window.opener.postMessage( {op:"setStyleRule", style:selectedStyle.opt }, "*" );
+		window.editGrid.send( {op:"setStyleRule", style:selectedStyle.opt }, "*" );
 	}
 } );
 
@@ -135,7 +127,7 @@ createStyle.addEventListener( "click", ()=>{
 	if( val ) {
 		var style;
 		addScriptOption( allScripts, script = { src : val } );
-		window.opener.postMessage( {op:"createScript", src:script.src }, "*" );
+		window.editGrid.send( {op:"createScript", src:script.src }, "*" );
 	}
 } );
 
@@ -143,20 +135,21 @@ var updateStyle = document.getElementById( "updateScript" );
 updateStyle.addEventListener( "click", ()=>{
 	if( selectedStyle ) {
 		selectedScript.opt.src = currentScript.value;
-		window.opener.postMessage( {op:"setScriptsrc", style:selectedStyle.opt }, "*" );
+		window.editGrid.send( {op:"setScriptsrc", style:selectedStyle.opt }, "*" );
 	}
 } );
 
 
 var clearSelection = document.getElementById( "clearSelection" );
 clearSelection.addEventListener( "click", ()=>{
-	window.opener.postMessage( {op:"clearSelection"}, "*" );
+	window.editGrid.send( {op:"clearSelection"}, "*" );
 	
 } );
 
 var applyCoords = document.getElementById( "applyCoords" );
 applyCoords.addEventListener( "click", ()=>{
-	window.opener.postMessage( {op:"setLayout", index: selectedDiv._index
+    		if( selectedDiv )
+	window.editGrid.send( {op:"setLayout", index: selectedDiv._index
 			, layout:{left:rectInfo.layoutLeft.value
 				,top:rectInfo.layoutTop.value
 				,width:rectInfo.layoutWidth.value
@@ -170,6 +163,7 @@ allScripts.onchange = scriptSelect
 allStyles.onchange = styleSelect
 namedDivs.onchange = namedSelect
 allDivs.onchange = allSelect
+allDivs.oninput = allSelect
 
 function addScriptOption( list, opt ) {
 	var option = document.createElement("option");
@@ -193,13 +187,17 @@ function addStyleOption( list, opt ) {
 function addOption( list, opt ) {
 	var option = document.createElement("option");
 	var leader = "";
-	for( n = 0; n < opt.level;n++ )
+	for( let n = 0; n < opt.level;n++ )
 		leader += "...";
 	option.text = leader + ( opt.id || opt.altId );
 	option._index = opt.index;
 	option.rect = opt.rect;
 	option.layout = opt.layout;
 	option.opt = opt;
+        option.setAttribute( "selected", true );
+
+	selectedDiv = option;
+        updateCoords();
 	//console.log( "option index : ", opt._index, option.text );
 	list.add(option);
 }
@@ -214,7 +212,7 @@ function styleSelect() {
 	//console.log( "SELECTED:", selectedDiv );
 	//updateStyle();
 	currentStyle.value = selectedStyle.opt.cssText;
-	//window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
+	//window.editGrid.send( {op:"select", index: selectedDiv._index}, "*" );
 }
 
 function namedSelect() {
@@ -222,19 +220,20 @@ function namedSelect() {
 	selectedDiv = namedDivs.options[namedDivs.selectedIndex];
 	//console.log( "SELECTED:", selectedDiv );
 	updateCoords();
-	window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
+	window.editGrid.send( {op:"select", index: selectedDiv._index}, "*" );
 }
 
 function allSelect() {
 	namedDivs.selectedIndex = -1;
 	selectedDiv = allDivs.options[allDivs.selectedIndex];
-	//console.log( "SELECTED:", selectedDiv );
+	console.log( "SELECTED:", selectedDiv );
 	updateCoords();
-	window.opener.postMessage( {op:"select", index: selectedDiv._index}, "*" );
+	window.editGrid.send( {op:"select", index: selectedDiv._index}, "*" );
 }
 
 
 function updateCoords() {
+
 	rectInfo.left.value = selectedDiv.rect.left;	
 	rectInfo.top.value = selectedDiv.rect.top;	
 	rectInfo.width.value = selectedDiv.rect.width;	

@@ -1,6 +1,28 @@
 "use strict";
 const _debug = false;
 
+window.editGrid = {
+    toolbox : null,
+    setToolbox( toolbox ) {
+        	editGrid.toolbox = toolbox;
+        	console.log( "Toolbox thinks it wants to add itself:", toolbox );
+    },
+
+    };
+
+{
+    var head  = document.getElementsByTagName('head')[0];
+    var link  = document.createElement('link');
+    //link.id   = cssId;
+    link.rel  = 'stylesheet';
+    link.type = 'text/css';
+    link.href = './node_modules/@d3x0r/popups/styles.css';
+    link.media = 'all';
+    head.appendChild(link);
+}
+
+import {Popup, popups} from "./node_modules/@d3x0r/popups/popups.mjs";
+
 var arrScripts = document.getElementsByTagName('script');
 var strScriptTagId = arrScripts[arrScripts.length - 1];
 //debugger;
@@ -39,6 +61,8 @@ setupGrid();
 //---------------------------------------------------------------------------
 // The remainider of this script is all within this function as a context.
 //---------------------------------------------------------------------------
+import {JSOX} from "./node_modules/jsox/lib/jsox.mjs"
+JSON = JSOX;
 
 
 function setupGrid() {
@@ -59,29 +83,6 @@ function handleResize() {
 
 }
 
-if( !("require" in window) ) {
-	if( !require_required ) {
-		var script = document.createElement( "SCRIPT" );
-		script.src =  origin + "/util/require.js";
-		//document.body.appendChild( script );
-		require_required = true;
-
-		script = document.createElement( "SCRIPT" );
-		script.src =  origin + "/util/json6.js";
-		document.body.appendChild( script );
-		script.onload = ()=>{
-			JSON.parse = JSON6.parse;
-			console.log( "loaded" );
-		}	
-	}
-	//setTimeout( setupGrid, 10 );
-	//return;
-}
-//if( !window.require ) {
-//	setTimeout( setupGrid, 10 );
-//	return;
-//}
-
 
 var styles = []; // these are styles for the page.....
 var allScripts = [];
@@ -94,18 +95,20 @@ var undo = [];
 var root = document.documentElement;
 console.log( root );
 
+const toolbox = popups.makeFromURL(  "./toolbox.html" );
+toolbox.divFrame.style.zIndex = 50;
 
-//var toolbox_window = window.open("toolbox.js");
 if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 	origin = origin.replace( "wss:", "https:" );
 	origin = origin.replace( "ws:", "http:" );
 	console.log( "origin is now:", origin );
-	console.log( "Launch Popup:", origin + "/toolbox.html" );
-	var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
 
-	window.addEventListener( 'message', ProcessChildMessage );
+	//var toolbox_window = window.open( origin + "/toolbox.html", "editor_toolbox" );
 
-	//toolbox_window.postMessage( '{op:"connected"}', toolbox_window.location.href );
+	//window.addEventListener( 'message', ProcessChildMessage );
+
+	window.editGrid.send = ProcessChildMessage;
+	//window.editGrid.toolbox.post( {op:"connected"}, toolbox_window.location.href );
 
 	function ProcessChildMessage(message) {
 		// do something with the message
@@ -113,15 +116,16 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 		try {
 			var msg = message.data;
 			if( msg.op == "Hello" ) {
+                            	
 				postDivs(toolbox_window);
 				postStyles(toolbox_window);
 				postScripts(toolbox_window);
 			}
 			else if( msg.op === "select" ) {
-				selected_control = allControls[msg.index];
+				mouse.selected_control = allControls[msg.index];
 			}
 			else if( msg.op === "clearSelection" ) {
-				selected_control = null;
+				mouse.selected_control = null;
 			}
 			else if( msg.op === "setId" ) {
 				var tmp = allControls[msg.index];
@@ -157,17 +161,17 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 				tmp.element.src = msg.src;
 			}
 			else if( msg.op === "setLayout" ) {
-				selected_control = allControls[msg.index];
-				var undoRecord = { control: selected_control, layout :  readRect( selected_control.element ) };
+				mouse.selected_control = allControls[msg.index];
+				var undoRecord = { control: mouse.selected_control, layout :  readRect( mouse.selected_control.element ) };
 				undo.push( undoRecord );
 				if( msg.layout.left )
-					selected_control.element.style.left = msg.layout.left;
+					mouse.selected_control.element.style.left = msg.layout.left;
 				if( msg.layout.top )
-					selected_control.element.style.top = msg.layout.top;
+					mouse.selected_control.element.style.top = msg.layout.top;
 				if( msg.layout.width )
-					selected_control.element.style.width = msg.layout.width;
+					mouse.selected_control.element.style.width = msg.layout.width;
 				if( msg.layout.height )
-					selected_control.element.style.height = msg.layout.height;
+					mouse.selected_control.element.style.height = msg.layout.height;
 			} else if( msg.op === "createStyleRule" ) {
 				if( document.styleSheets.length ) {
 					document.styleSheets[0].addRule( selector, "" );
@@ -190,15 +194,22 @@ if( !location.pathname.includes( "editor/toolbox.html" ) ) {
 
 var gameContainer;
 var editmesh;
-var visible = false;
+var visible = true;
 var ctx;  // this is what to draw on...
 
-var mouse_drag;
-var mouse_size;
-var mouse_over;
-var selected_control;
+const mouse = {
+    drag: false,
+        size:false,
+        over:false,
+        selected_control:null,
+        selectRect:false,
+        selectedRect : false,
+        pos:{x:0,y:0},
+        rect:{ x:0,y:0,xto:0,yto:0 }
+        }
 
 
+addEditor();
 
 function addEditor() {
 	if( !gameContainer ) {
@@ -209,7 +220,7 @@ function addEditor() {
 		gameContainer.style.top = 0;
 		gameContainer.style.width = "100%";
 		gameContainer.style.height = "100%";
-		gameContainer.style.zIndex = 10000;
+		gameContainer.style.zIndex = 10;
 	        
 		editmesh = document.createElement( "canvas" );
 	        
@@ -223,112 +234,170 @@ function addEditor() {
 
 		ctx=editmesh.getContext("2d");
 
+                const popup = popups.createMenu();
+                popup.addItem("Create Div", ()=>{
+			const r = { left: mouse.rect.x, top:mouse.rect.y, width:mouse.rect.xto-mouse.rect.x, height:mouse.rect.yto-mouse.rect.y };
+                        const l = {left: mouse.rect.x/19.2, top:mouse.rect.y/10.8, width:r.width/19.2, height:r.height/10.8 };
+			const div = document.createElement( "div" )
+			div.className = "scribariumDiv";
+                        div.style.position = "absolute";
+                        div.style.left = l.left+"%";
+                        div.style.top = l.top+"%";
+                        div.style.width = l.width+"%";
+                        div.style.height = l.height+"%";
+                        gameContainer.appendChild( div );
+                        mouse.selectedRect = false;
+			const c = Control( div, r, {left: mouse.rect.x/19.2, top:mouse.rect.y/10.8, width:r.width/19.2, height:r.height/10.8 } )
+                        mouse.selected_control = c;
+                        fixLayout(c);
+                        window.editGrid.toolbox.post( packDiv( c ), origin_addr );
+                        drawControls();
+		} );
+
+
 		editmesh.addEventListener( "mouseup", (event) => {
 			if( !visible ) return;
 			//console.log( "Mouse Event : ", event );
 			event.preventDefault();
-			mouse_drag = null;//locateTarget( document.body.childNodes, event );
-			mouse_size = null;//locateTarget( document.body.childNodes, event );
+                        if( mouse.selectRect ) {
+	                        mouse.selectRect = false;
+	                        mouse.selectedRect = true;
+                                drawControls();
+                        }
+			mouse.drag = null;//locateTarget( document.body.childNodes, event );
+			mouse.size = null;//locateTarget( document.body.childNodes, event );
 		})
 
+		editmesh.addEventListener( "contextmenu", (event)=>{
+			event.preventDefault();
+                        if( mouse.selectedRect ) {
+	                        if( mouse.pos.x >= mouse.rect.x && mouse.pos.x <= mouse.rect.xto ) {
+	                        if( mouse.pos.y >= mouse.rect.y && mouse.pos.y <= mouse.rect.yto ) {
+                                    	popup.show();
+                                    }
+        	                }
+                        }
+		} );
 		editmesh.addEventListener( "mousedown", (event) => {
 			//console.log( "Mouse Event : ", event );
 			if( !visible ) return;
 			event.preventDefault();
-			if( selected_control ){
+
+			if( mouse.selected_control ){
 				var nearEdge = 0;
-				if( ( event.clientX - selected_control.rect.left ) < 10 ) {
+				if( ( event.clientX - mouse.selected_control.rect.left ) < 10 ) {
 					nearEdge |= 1;
 				}
-				if( ( event.clientY - selected_control.rect.top ) < 10 )
+				if( ( event.clientY - mouse.selected_control.rect.top ) < 10 )
 					nearEdge |= 2;
-				if( ( selected_control.rect.bottom - event.clientY ) < 10 )
+				if( ( mouse.selected_control.rect.bottom - event.clientY ) < 10 )
 					nearEdge |= 4;
-				if( ( selected_control.rect.right - event.clientX ) < 10 )
+				if( ( mouse.selected_control.rect.right - event.clientX ) < 10 )
 					nearEdge |= 8;
-				mouse_drag = { element : selected_control.element, control : selected_control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:0 };
+				mouse.drag = { element : mouse.selected_control.element, control : mouse.selected_control, x: event.clientX, y:event.clientY, e : event, nearEdge : nearEdge, level:0 };
 			} else {
-				mouse_drag = locateTarget( controls, event, 0 );
-				if( mouse_drag && !mouse_drag.element.id )
-					mouse_drag = null;
-			}
-			console.log( "Mouse_drag has changed....", mouse_drag );
-			if( mouse_drag && mouse_drag.nearEdge )  {
-				mouse_size = mouse_drag;
-				mouse_drag = null;
+				mouse.drag = locateTarget( controls, event, 0 );
+				if( mouse.drag && !mouse.drag.element.id )
+					mouse.drag = null;
 			}
 
-			if( mouse_drag || mouse_size ) {
-				var undoRecord = { selection: mouse_drag||mouse_size, firstEvent : event
-				     , position: readRect( (mouse_drag||mouse_size).element )  };
-				undo.push( undoRecord );
+			console.log( "Mouse_drag has changed....", mouse.drag );
+			if( mouse.drag && mouse.drag.nearEdge )  {
+				mouse.size = mouse.drag;
+				mouse.drag = null;
 			}
+
+			if( mouse.drag || mouse.size ) {
+				var undoRecord = { selection: mouse.drag||mouse.size, firstEvent : event
+				     , position: readRect( (mouse.drag||mouse.size).element )  };
+				undo.push( undoRecord );
+			}else {
+                            if( !mouse.selectedRect ) {
+                            	mouse.selectRect = true;
+	                            mouse.selectedRect = false;
+        	                    mouse.rect.x = event.clientX;
+                	            mouse.rect.y = event.clientY;
+                        	    mouse.rect.xto = event.clientX;
+	                            mouse.rect.yto = event.clientY;
+				defaultRefresh();
+                            }
+                        }
 		})
 
 		editmesh.addEventListener( "mousemove", (event) => {
 			if( !visible ) return;
-			mouse_over = locateTarget( controls, event, 0 );
-                        //console.log( "Mouse Move Event : ", (mouse_drag)?"DRAG":"" );
-			if( mouse_size ) {
-				event.preventDefault();
-				var deltaX = 100*(event.clientX - mouse_size.x) / mouse_size.control.pr.width;
-                        	var deltaY = 100*(event.clientY - mouse_size.y)/mouse_size.control.pr.height;
 
-				var rect = readRect( mouse_size.element );
-				if( mouse_size.nearEdge & 1 ) {
-					mouse_size.element.style.left = rect.left + deltaX+ "%";
-					mouse_size.element.style.width = rect.width - deltaX+ "%";
+                        mouse.pos.x = event.clientX;
+                        mouse.pos.y = event.clientY;
+                        if( mouse.selectRect ) {
+                            	event.preventDefault();
+	                        mouse.rect.xto = event.clientX;
+        	                mouse.rect.yto = event.clientY;
+				drawControls();
+                            	return;
+                        }
+			mouse.over = locateTarget( controls, event, 0 );
+                        //console.log( "Mouse Move Event : ", (mouse.drag)?"DRAG":"" );
+			if( mouse.size ) {
+				event.preventDefault();
+				var deltaX = 100*(event.clientX - mouse.size.x) / mouse.size.control.pr.width;
+                        	var deltaY = 100*(event.clientY - mouse.size.y)/mouse.size.control.pr.height;
+
+				var rect = readRect( mouse.size.element );
+				if( mouse.size.nearEdge & 1 ) {
+					mouse.size.element.style.left = rect.left + deltaX+ "%";
+					mouse.size.element.style.width = rect.width - deltaX+ "%";
 				}
-				if( mouse_size.nearEdge & 2 ) {
-					mouse_size.element.style.top = rect.top + deltaY+ "%";
-					mouse_size.element.style.height = rect.height - deltaY+ "%";
+				if( mouse.size.nearEdge & 2 ) {
+					mouse.size.element.style.top = rect.top + deltaY+ "%";
+					mouse.size.element.style.height = rect.height - deltaY+ "%";
 				}
-				if( mouse_size.nearEdge & 4 ) {
-					//mouse_size.element.style.top = top + deltaY;
-					mouse_size.element.style.height = rect.height + deltaY+ "%";
+				if( mouse.size.nearEdge & 4 ) {
+					//mouse.size.element.style.top = top + deltaY;
+					mouse.size.element.style.height = rect.height + deltaY+ "%";
 				}
-				if( mouse_size.nearEdge & 8 ) {
-					mouse_size.element.style.width = rect.width + deltaX + "%";
+				if( mouse.size.nearEdge & 8 ) {
+					mouse.size.element.style.width = rect.width + deltaX + "%";
 				}
-				updateRects( mouse_size.control );
+				updateRects( mouse.size.control );
 				if( editmesh )
 					drawControls();
 
-				mouse_size.x = event.clientX;
-				mouse_size.y = event.clientY;
+				mouse.size.x = event.clientX;
+				mouse.size.y = event.clientY;
 			}
-                        if( mouse_drag ) {
+                        if( mouse.drag ) {
 				event.preventDefault();
 
-				var deltaX = 100 * ( event.clientX - mouse_drag.x ) / mouse_drag.control.pr.width;
-                        	var deltaY = 100 * ( event.clientY - mouse_drag.y ) / mouse_drag.control.pr.height;
-				var left = Number(mouse_drag.element.style.left.replace('%', ''))||0;
-				var top = Number(mouse_drag.element.style.top.replace('%', ''))||0;
-				//var c = mousePercent( mouse_drag, event );
+				var deltaX = 100 * ( event.clientX - mouse.drag.x ) / mouse.drag.control.pr.width;
+                        	var deltaY = 100 * ( event.clientY - mouse.drag.y ) / mouse.drag.control.pr.height;
+				var left = Number(mouse.drag.element.style.left.replace('%', ''))||0;
+				var top = Number(mouse.drag.element.style.top.replace('%', ''))||0;
+				//var c = mousePercent( mouse.drag, event );
 
-			        mouse_drag.element.style.left =(left +deltaX)+"%";//- ((mouse_drag.x-event.clientX)/10))+"%";
-                        	mouse_drag.element.style.top = (top  +deltaY)+"%";//- ((mouse_drag.y-event.clientY) / 10))+"%";
+			        mouse.drag.element.style.left =(left +deltaX)+"%";//- ((mouse.drag.x-event.clientX)/10))+"%";
+                        	mouse.drag.element.style.top = (top  +deltaY)+"%";//- ((mouse.drag.y-event.clientY) / 10))+"%";
 
-				var staticRect = mouse_drag.element.getBoundingClientRect();
+				var staticRect = mouse.drag.element.getBoundingClientRect();
 				var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
 
-				rect.left += mouse_drag.control.rectOffset.left;
-				rect.top += mouse_drag.control.rectOffset.top;
-				rect.right += mouse_drag.control.rectOffset.left;
-				rect.bottom += mouse_drag.control.rectOffset.top;
-                                Object.assign( mouse_drag.control.rect, rect );
-				updateRects( mouse_drag.control.child );
+				rect.left += mouse.drag.control.rectOffset.left;
+				rect.top += mouse.drag.control.rectOffset.top;
+				rect.right += mouse.drag.control.rectOffset.left;
+				rect.bottom += mouse.drag.control.rectOffset.top;
+                                Object.assign( mouse.drag.control.rect, rect );
+				updateRects( mouse.drag.control.child );
 				if( editmesh )
 					drawControls();
 
-			//console.log( "rect top:", mouse_drag.control.rect.top, mouse_drag.element.style.top, staticRect.top );
+			//console.log( "rect top:", mouse.drag.control.rect.top, mouse.drag.element.style.top, staticRect.top );
 
-				mouse_drag.x = event.clientX;
-				mouse_drag.y = event.clientY;
+				mouse.drag.x = event.clientX;
+				mouse.drag.y = event.clientY;
 
 				// e is readonly...
-			//mouse_drag.e.clientX = event.clientX;
-			//mouse_drag.e.clientY = event.clientY;
+			//mouse.drag.e.clientX = event.clientX;
+			//mouse.drag.e.clientY = event.clientY;
 
                         }
 		      })
@@ -555,6 +624,7 @@ function getOffset( el ) {
 	function updateRects( control ) {
 		while( control ) {
 			var staticRect = control.element.getBoundingClientRect();
+                        console.log( "control's rect:", staticRect );
 			var rect = { left:staticRect.left,top:staticRect.top,width:staticRect.width,height:staticRect.height, right:staticRect.right, bottom: staticRect.bottom };
 			rect.left += control.rectOffset.left;
 			rect.top += control.rectOffset.top;
@@ -587,7 +657,7 @@ function Control( element, rect, rectOffset ) {
 	//console.log( "Addint a control at: ", rect.top, c.index, element.nodeName, element.id );
 
 	// set current pixel correds into relative coords.
-	fixLayout( c );
+	//fixLayout( c );
 
 	//console.log( "New Control is: ", c, Object.keys( Object.getPrototypeOf( element) ))
 	for( var n = 0; n < controls.length; n++ ) {
@@ -665,7 +735,7 @@ function fixLayout(c) {
 
 	c.pr = pr;
 	c.er = er;
-
+	//console.log( "Applying FixLayout to:", c.element.id, c.element.className );
 	if( !e.style.left || !e.style.left.endsWith( "%" ) ) {
 		//e.style.left = 100 * er.left / pr.width + "%";
 		e.style.left = 100 * e.clientLeft / p.clientWidth + "%";
@@ -719,7 +789,8 @@ function postDivs( w ) {
 			postDiv( control.elder );
 
 		try {
-			w.postMessage( packDiv( control ), origin_addr );
+
+		      w.post( packDiv( control ), origin_addr );
 		}catch( err ) {
 			console.log ("POST MESSAGE PUKED:", err );
 		}
@@ -731,7 +802,7 @@ function postStyles( w ) {
 	styles.forEach( postStyle );
 	function postStyle(style){
 		try {
-			w.postMessage( {op:"style", 
+			w.post( {op:"style", 
 				index : style.index,
 				cssText : style.style.cssText,
 				selectorText : style.style.selectorText,
@@ -746,7 +817,7 @@ function postScripts( w ) {
 	allScripts.forEach( postScript );
 	function postScript(script){
 		try {
-			w.postMessage( {op:"script", 
+			w.post( {op:"script", 
 				src : script.src,
 			}, origin_addr );
 		}catch( err ) {
@@ -761,6 +832,30 @@ function drawControls() {
 
 	ctx.clearRect(0, 0, editmesh.width, editmesh.height);
 
+        if( mouse.selectRect ) {
+                const minx = (mouse.rect.x < mouse.rect.xto) ? mouse.rect.x : mouse.rect.xto;
+                const miny = (mouse.rect.y < mouse.rect.yto) ? mouse.rect.y : mouse.rect.yto;
+                ctx.fillStyle = "#30303030";
+            	ctx.fillRect( minx, miny, Math.abs(mouse.rect.x - mouse.rect.xto ), Math.abs(mouse.rect.y - mouse.rect.yto ) );
+        }
+        if( mouse.selectedRect ) {
+                const minx = (mouse.rect.x < mouse.rect.xto) ? mouse.rect.x : mouse.rect.xto;
+                const miny = (mouse.rect.y < mouse.rect.yto) ? mouse.rect.y : mouse.rect.yto;
+                if( mouse.rect.x != minx ){
+                    	const tmpx = mouse.rect.x;
+	                mouse.rect.x = minx;
+                        mouse.rect.xto = tmpx;
+                }
+                if( mouse.rect.y != miny ){
+                    	const tmpy = mouse.rect.y;
+	                mouse.rect.y = miny;
+                        mouse.rect.yto = tmpy;
+                }
+
+                ctx.fillStyle = "#00600030";
+            	ctx.fillRect( minx, miny, Math.abs(mouse.rect.x - mouse.rect.xto ), Math.abs(mouse.rect.y - mouse.rect.yto ) );
+        }
+
 	function forall( root, cb ) {
 		for( var a = root; a; a = a.elder) cb( a );
 	}
@@ -774,28 +869,28 @@ function drawControl(control){
 	if( !control ) return;
 	//control.rect = control.element.getBoundingClientRect();
 	var rect = control.rect;
-	if( selected_control === control ) {
+	if( mouse.selected_control === control ) {
 		stroke_width = 4;
-			if( mouse_over && mouse_over.nearEdge & 1 ) 
+			if( mouse.over && mouse.over.nearEdge & 1 ) 
 				stroke[0] = "white";
 			else
 				stroke[0] = "red";
-			if( mouse_over && mouse_over.nearEdge & 2 ) 
+			if( mouse.over && mouse.over.nearEdge & 2 ) 
 				stroke[1] = "yellow";
 			else
 				stroke[1] = "red";
-			if( mouse_over && mouse_over.nearEdge & 4 ) 
+			if( mouse.over && mouse.over.nearEdge & 4 ) 
 				stroke[2] = "yellow";
 			else
 				stroke[2] = "red";
-			if( mouse_over && mouse_over.nearEdge & 8 ) 
+			if( mouse.over && mouse.over.nearEdge & 8 ) 
 				stroke[3] = "yellow";
 			else
 				stroke[3] = "red";
 	}
-	if( ( mouse_drag && ( mouse_drag.control == control ) ) 
-	  || ( mouse_size && ( mouse_size.control == control ) ) ) {
-		var thisControl = mouse_drag || mouse_size;
+	if( ( mouse.drag && ( mouse.drag.control == control ) ) 
+	  || ( mouse.size && ( mouse.size.control == control ) ) ) {
+		var thisControl = mouse.drag || mouse.size;
 		stroke_width = 4;
 			if( thisControl && thisControl.nearEdge & 1 ) 
 				stroke[0] = "white";
@@ -814,22 +909,22 @@ function drawControl(control){
 			else
 				stroke[3] = "blue";
 	}
-	else if( ( !selected_control && !mouse_drag ) && mouse_over && mouse_over.element === control.element )  {
+	else if( ( !mouse.selected_control && !mouse.drag ) && mouse.over && mouse.over.element === control.element )  {
 		stroke_width = 3;
-		if( mouse_over.nearEdge ) {
-			if( mouse_over.nearEdge & 1 ) 
+		if( mouse.over.nearEdge ) {
+			if( mouse.over.nearEdge & 1 ) 
 				stroke[0] = "yellow";
 			else
 				stroke[0] = "green";
-			if( mouse_over.nearEdge & 2 ) 
+			if( mouse.over.nearEdge & 2 ) 
 				stroke[1] = "yellow";
 			else
 				stroke[1] = "green";
-			if( mouse_over.nearEdge & 4 ) 
+			if( mouse.over.nearEdge & 4 ) 
 				stroke[2] = "yellow";
 			else
 				stroke[2] = "green";
-			if( mouse_over.nearEdge & 8 ) 
+			if( mouse.over.nearEdge & 8 ) 
 				stroke[3] = "yellow";
 			else
 				stroke[3] = "green";
@@ -839,9 +934,9 @@ function drawControl(control){
 			stroke[2] = "green";
 			stroke[3] = "green";
 		}
-	} else if( mouse_drag !== selected_control 
-		&& mouse_over !== selected_control 
-		&& selected_control !== control ) {
+	} else if( mouse.drag !== mouse.selected_control 
+		&& mouse.over !== mouse.selected_control
+		&& mouse.selected_control !== control ) {
 		stroke_width = 0.5;
 			stroke[0] = "black";
 			stroke[1] = "black";
@@ -917,6 +1012,8 @@ function setupControls() {
 		//console.log( "Looking at element:", element );
 		if( element === editmesh ) return false;
 		if( element === gameContainer ) return false;
+                if( element === toolbox.divFrame ) return false;
+
 		if( "IFRAME" === element.nodeName ) {
 			var priorOffset = controlOffset;
 			controlOffset = element.getBoundingClientRect();
@@ -955,6 +1052,7 @@ function setupControls() {
 		}
 		var created = false;
 		if( ["BODY","DIV","IMG","SPAN"].find( tag=>tag === element.nodeName ) ){
+                    	
 			var existing = allControls.find( c=>c.element === element );	
 			if( !existing ) {
 				var staticRect = element.getBoundingClientRect();
@@ -964,6 +1062,7 @@ function setupControls() {
 				rect.top += controlOffset.top;
 				rect.right += controlOffset.left;
 				rect.bottom += controlOffset.top;
+
 				created = Control( element, rect, controlOffset );
 			}
 			else
@@ -978,11 +1077,14 @@ function setupControls() {
 		}
 		return created;
 	}
+
 	addControls( controls[0], document.body );
+        /*
 	if( loading )
 		setTimeout( setupControls, 500 );
 	else if( idle_count++ < 3 ) 
 		setTimeout( setupControls, 500 ) ;
+	*/
 
 }
 setupControls();

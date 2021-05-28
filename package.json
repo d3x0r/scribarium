@@ -21,6 +21,7 @@
   "author": "d3x0r",
   "license": "LGPL-3.0",
   "dependencies": {
-    "sack.vfs": "^0.9.119"
+    "@d3x0r/popups": "latest",
+    "sack.vfs": "latest"
   }
 }
